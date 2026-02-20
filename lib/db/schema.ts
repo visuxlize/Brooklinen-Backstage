@@ -1,11 +1,6 @@
 import { pgTable, text, timestamp, uuid, integer, date, jsonb, numeric, unique } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
-// Reference to Supabase auth.users
-export const authUsers = pgTable('auth.users', {
-  id: uuid('id').primaryKey(),
-})
-
 export const stores = pgTable('stores', {
   id: integer('id').primaryKey(),
   name: text('name').notNull(),
