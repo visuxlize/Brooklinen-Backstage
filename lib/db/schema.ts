@@ -1,83 +1,107 @@
-import { pgTable, text, timestamp, uuid, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, uuid, integer, date, jsonb, numeric, unique } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
-/**
- * Database Schema Definition
- * 
- * Define all your database tables here. Drizzle will use these definitions to:
- * 1. Generate TypeScript types automatically
- * 2. Create SQL migrations
- * 3. Provide type-safe database operations
- * 
- * After modifying this file:
- * 1. Run: npm run db:generate (creates migration)
- * 2. Review migration in /drizzle folder
- * 3. Run: npm run db:migrate (applies migration)
- */
+// Reference to Supabase auth.users
+export const authUsers = pgTable('auth.users', {
+  id: uuid('id').primaryKey(),
+})
 
-/**
- * Users table
- * 
- * Stores user profile information. The `id` should match Supabase Auth user IDs
- * for easy relationship management.
- * 
- * Example usage:
- * ```typescript
- * import { db } from '@/lib/db'
- * import { users } from '@/lib/db/schema'
- * 
- * // Insert new user
- * await db.insert(users).values({
- *   id: authUser.id,
- *   email: authUser.email,
- *   fullName: 'John Doe'
- * })
- * 
- * // Get user by ID
- * const user = await db.select().from(users).where(eq(users.id, userId))
- * ```
- */
+export const stores = pgTable('stores', {
+  id: integer('id').primaryKey(),
+  name: text('name').notNull(),
+  city: text('city').notNull(),
+  color: text('color').notNull(),
+  hours: jsonb('hours').notNull(),
+})
+
 export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
+  id: uuid('id').primaryKey(),
+  name: text('name').notNull(),
   email: text('email').notNull().unique(),
-  fullName: text('full_name'),
-  avatarUrl: text('avatar_url'),
-  isActive: boolean('is_active').default(true).notNull(),
+  role: text('role').notNull(), // "ops" | "leader" | "associate"
+  storeId: integer('store_id').references(() => stores.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const schedules = pgTable(
+  'schedules',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    storeId: integer('store_id').notNull().references(() => stores.id),
+    employeeName: text('employee_name').notNull(),
+    weekStart: date('week_start').notNull(),
+    dayOfWeek: integer('day_of_week').notNull(), // 0=Sun 6=Sat
+    shiftValue: text('shift_value'),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    scheduleUnique: unique('schedules_unique').on(t.storeId, t.employeeName, t.weekStart, t.dayOfWeek),
+  })
+)
+
+export const trafficWeekly = pgTable(
+  'traffic_weekly',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    storeId: integer('store_id').notNull().references(() => stores.id),
+    weekStart: date('week_start').notNull(),
+    sun: integer('sun').default(0),
+    mon: integer('mon').default(0),
+    tue: integer('tue').default(0),
+    wed: integer('wed').default(0),
+    thu: integer('thu').default(0),
+    fri: integer('fri').default(0),
+    sat: integer('sat').default(0),
+    total: integer('total').default(0),
+    trendMult: numeric('trend_mult', { precision: 6, scale: 4 }),
+    trafficCount: integer('traffic_count'),
+  },
+  (t) => ({
+    trafficUnique: unique('traffic_weekly_unique').on(t.storeId, t.weekStart),
+  })
+)
+
+export const hourlyTraffic = pgTable('hourly_traffic', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  storeId: integer('store_id').notNull().references(() => stores.id),
+  hour: integer('hour').notNull(), // 10–20 (10AM–8PM)
+  dayOfWeek: integer('day_of_week').notNull(),
+  avgCount: numeric('avg_count', { precision: 6, scale: 2 }),
+  dailyTotal: numeric('daily_total', { precision: 8, scale: 2 }),
+  pctOfDay: numeric('pct_of_day', { precision: 5, scale: 4 }),
+  storeMax: numeric('store_max', { precision: 6, scale: 2 }),
+  pctOfMax: numeric('pct_of_max', { precision: 5, scale: 4 }),
+})
+
+export const rtoRequests = pgTable('rto_requests', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  storeId: integer('store_id').notNull().references(() => stores.id),
+  employeeName: text('employee_name').notNull(),
+  employeeEmail: text('employee_email').notNull(),
+  requestedDays: text('requested_days').notNull(),
+  type: text('type').notNull(), // "RTO" | "PTO" | "COMP" | "Sick"
+  partialTime: text('partial_time'),
+  note: text('note'),
+  status: text('status').notNull().default('pending'), // "pending" | "approved" | "denied"
+  leaderNote: text('leader_note'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
-/**
- * Example: Posts table (commented out, uncomment and modify as needed)
- * 
- * This shows how to create relationships between tables.
- */
-/*
-import { integer } from 'drizzle-orm/pg-core'
-
-export const posts = pgTable('posts', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  title: text('title').notNull(),
-  content: text('content'),
-  published: boolean('published').default(false).notNull(),
-  viewCount: integer('view_count').default(0).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+export const retailData = pgTable('retail_data', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  storeId: integer('store_id').notNull().references(() => stores.id),
+  date: date('date').notNull(),
+  budgetNet: numeric('budget_net', { precision: 12, scale: 2 }),
+  lyNet: numeric('ly_net', { precision: 12, scale: 2 }),
 })
-*/
 
-/**
- * Type exports
- * 
- * Drizzle automatically generates TypeScript types from your schema.
- * You can export these for use in your application:
- * 
- * ```typescript
- * import { type User, type NewUser } from '@/lib/db/schema'
- * 
- * // User = full user object with all fields
- * // NewUser = user object for insertion (no auto-generated fields like id, createdAt)
- * ```
- */
+// Type exports
+export type Store = typeof stores.$inferSelect
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
+export type Schedule = typeof schedules.$inferSelect
+export type TrafficWeekly = typeof trafficWeekly.$inferSelect
+export type HourlyTraffic = typeof hourlyTraffic.$inferSelect
+export type RtoRequest = typeof rtoRequests.$inferSelect
+export type RetailData = typeof retailData.$inferSelect
