@@ -8,7 +8,7 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   // Check if user is authenticated
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user }, error } = await supabase.auth.getUser()
 
   if (error || !user) {

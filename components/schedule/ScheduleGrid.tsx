@@ -119,7 +119,8 @@ export function ScheduleGrid({
     setEmailState('loading')
     try {
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(gridRef.current, { scale: 2, useCORS: true })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const canvas = await html2canvas(gridRef.current, { scale: 2, useCORS: true } as any)
       const imageBase64 = canvas.toDataURL('image/png')
 
       const res = await fetch('/api/schedule/email', {
