@@ -5,18 +5,35 @@ import { format, addWeeks, startOfWeek, addDays } from 'date-fns'
 import { sql } from 'drizzle-orm'
 
 const EMPLOYEES_101 = [
-  'Victoria Z.',
-  'Braiden W.',
-  'Rachel S.',
-  'Willow V.',
-  'Selene J.',
-  'Patrick S.',
+  'Andres', 'Victoria', 'Braiden', 'Rachel', 'Willow', 'Selene', 'Patrick',
+]
+
+const EMPLOYEES_102 = [
+'Chris', 'Abraham', 'Jennifer', 'Eve', 'Dylan', 'Hudson', 'Maggie',
+]
+
+const EMPLOYEES_103 = [
+  'Maribel', 'Randy', 'Talia', 'Sasha', 'Betty', 'Chung',
 ]
 
 const EMPLOYEES_104 = [
-  'Andy K.',
-  'Shir M.',
-  'Brandon F.',
+  'Andy', 'Brandon', 'Jennifer', 'Shir', 'Lillian', 'Carly',
+]
+
+const EMPLOYEES_105 = [
+  'Alyssa', 'Tai', 'Cole', 'Demonde', 'Aaliyah',
+]
+
+const EMPLOYEES_107 = [
+  'Demi', 'Quincy', 'Ainslie', 'Allison', 'Alexa',  
+]
+
+const EMPLOYEES_108 = [
+  'Vanessa', 'Hannah', 'Kaeli', 'Brianna', 'Marielique', 'Akira', 
+]
+
+const EMPLOYEES_109 = [
+  'LaShawn','Aleza', 'Flora', 'Ken', 'Arianna', 'Ruth',
 ]
 
 const SHIFT_TEMPLATES = [
@@ -109,11 +126,17 @@ async function main() {
   }
   console.log('Users seeded.')
 
-  // 3. Seed schedules for 5 weeks for stores 101 and 104
+  // 3. Seed schedules for 5 weeks for all eight stores
   console.log('Seeding schedules...')
   const storeEmployees: Record<number, string[]> = {
     101: EMPLOYEES_101,
+    102: EMPLOYEES_102,
+    103: EMPLOYEES_103,
     104: EMPLOYEES_104,
+    105: EMPLOYEES_105,
+    107: EMPLOYEES_107,
+    108: EMPLOYEES_108,
+    109: EMPLOYEES_109,
   }
 
   for (const [storeIdStr, emps] of Object.entries(storeEmployees)) {
