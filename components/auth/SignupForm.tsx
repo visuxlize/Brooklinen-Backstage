@@ -1,123 +1,141 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/Button'
+import { STORE_CONFIG } from '@/lib/stores'
+import { CheckCircle } from 'lucide-react'
+
+const ROLES = ['ops', 'leader', 'associate'] as const
 
 export function SignupForm() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    role: 'associate' as (typeof ROLES)[number],
+    storeId: STORE_CONFIG[0].id as number,
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setLoading(true)
     setError(null)
 
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    // Validate password strength
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters')
-      return
-    }
-
-    setLoading(true)
-
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          role: form.role,
+          storeId: form.role === 'ops' ? null : form.storeId,
+        }),
       })
-
-      if (error) {
-        setError(error.message)
-        return
-      }
-
-      // Success! You may want to show a message about checking email
-      router.push('/dashboard')
-      router.refresh()
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to create user')
+      setSuccess(true)
     } catch (err) {
-      setError('An unexpected error occurred')
+      setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setLoading(false)
     }
   }
 
+  if (success) {
+    return (
+      <div className="text-center py-4">
+        <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+          <CheckCircle className="w-6 h-6 text-green-600" />
+        </div>
+        <h2 className="font-semibold text-slate-900 mb-2">Account Created</h2>
+        <p className="text-sm text-slate-500 mb-4">An invite email has been sent to {form.email}.</p>
+        <Button variant="secondary" onClick={() => router.push('/admin')}>
+          Go to Admin
+        </Button>
+      </div>
+    )
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded text-red-600 dark:text-red-400 text-sm">
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
           {error}
         </div>
       )}
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium mb-2">
+        <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
+          Full Name
+        </label>
+        <input
+          type="text"
+          required
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Jane Smith"
+          className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
           Email
         </label>
         <input
-          id="email"
           type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
-          placeholder="you@example.com"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+          placeholder="jane@brooklinen.com"
+          className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium mb-2">
-          Password
+        <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
+          Role
         </label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
-          placeholder="••••••••"
-        />
-        <p className="text-xs text-gray-500 mt-1">
-          Must be at least 6 characters
-        </p>
+        <select
+          value={form.role}
+          onChange={(e) => setForm({ ...form, role: e.target.value as typeof form.role })}
+          className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
+        >
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {r.charAt(0).toUpperCase() + r.slice(1)}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
-          Confirm Password
-        </label>
-        <input
-          id="confirmPassword"
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          required
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
-          placeholder="••••••••"
-        />
-      </div>
+      {form.role !== 'ops' && (
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
+            Store
+          </label>
+          <select
+            value={form.storeId}
+            onChange={(e) => setForm({ ...form, storeId: parseInt(e.target.value) })}
+            className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
+          >
+            {STORE_CONFIG.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} — {s.city}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium transition-colors"
-      >
-        {loading ? 'Creating account...' : 'Create Account'}
-      </button>
+      <Button type="submit" isLoading={loading} className="w-full justify-center">
+        Create Account &amp; Send Invite
+      </Button>
     </form>
   )
 }
