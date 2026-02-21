@@ -34,6 +34,23 @@ export const schedules = pgTable(
   })
 )
 
+/** Per-week metadata: workload, promotions (per-day), optional hours override for the schedule. */
+export const scheduleWeekMeta = pgTable(
+  'schedule_week_meta',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    storeId: integer('store_id').notNull().references(() => stores.id),
+    weekStart: date('week_start').notNull(),
+    workload: jsonb('workload'), // { sun: string, mon: string, ... } per-day
+    promotions: jsonb('promotions'), // { sun: string, mon: string, ... } per-day
+    hoursOverride: jsonb('hours_override'), // { sun: string, mon: string, ... } when set, schedule uses this instead of store.hours
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    scheduleWeekMetaUnique: unique('schedule_week_meta_store_week').on(t.storeId, t.weekStart),
+  })
+)
+
 export const trafficWeekly = pgTable(
   'traffic_weekly',
   {
@@ -97,7 +114,7 @@ export const retailData = pgTable(
   })
 )
 
-/** Employee availability per store. One row per user per store per effective date. Use latest effective_date <= schedule date. */
+/** Employee availability per store. scope=ongoing: effective from effectiveDate onward. scope=week: only that week (effectiveDate = Sunday). */
 export const availability = pgTable(
   'availability',
   {
@@ -105,14 +122,15 @@ export const availability = pgTable(
     storeId: integer('store_id').notNull().references(() => stores.id),
     userId: uuid('user_id').notNull().references(() => users.id),
     effectiveDate: date('effective_date').notNull(),
-    type: text('type').notNull(), // 'na' | 'open' | 'partial'
-    /** For type=partial: { "0": ["14:00","21:00"], "1": ["14:00","21:00"], ... } day 0=Sun..6=Sat. [start, end] in HH:mm. Missing day = not available. */
+    scope: text('scope').notNull().default('ongoing'), // 'ongoing' | 'week'
+    type: text('type').notNull(), // legacy
     partialHours: jsonb('partial_hours'),
+    daySchedule: jsonb('day_schedule'), // { "0": { type, start?, end? }, ... } Sun=0..Sat=6
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => ({
-    availabilityUnique: unique('availability_store_user_effective').on(t.storeId, t.userId, t.effectiveDate),
+    availabilityUnique: unique('availability_store_user_effective_scope').on(t.storeId, t.userId, t.effectiveDate, t.scope),
   })
 )
 
@@ -126,3 +144,4 @@ export type HourlyTraffic = typeof hourlyTraffic.$inferSelect
 export type RtoRequest = typeof rtoRequests.$inferSelect
 export type RetailData = typeof retailData.$inferSelect
 export type Availability = typeof availability.$inferSelect
+export type ScheduleWeekMeta = typeof scheduleWeekMeta.$inferSelect

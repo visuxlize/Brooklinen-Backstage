@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Trash2, UserPlus, Pencil, Check, X, Mail, User, Lock } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Trash2, UserPlus, Pencil, Check, X, Mail, User, Lock, Clock } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Chip } from '@/components/ui/Chip'
 import { Button } from '@/components/ui/Button'
@@ -51,6 +51,50 @@ export function AdminPanel({ users: initialUsers, currentUser }: AdminPanelProps
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [storeHoursStoreId, setStoreHoursStoreId] = useState<number>(STORE_CONFIG[0].id)
+  const [storeHoursForm, setStoreHoursForm] = useState<Record<string, string>>({
+    sun: '', mon: '', tue: '', wed: '', thu: '', fri: '', sat: '',
+  })
+  const [loadingStoreHours, setLoadingStoreHours] = useState(false)
+  const [savingStoreHours, setSavingStoreHours] = useState(false)
+
+  useEffect(() => {
+    if (!isOps) return
+    let cancelled = false
+    setLoadingStoreHours(true)
+    fetch(`/api/stores/${storeHoursStoreId}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (cancelled || !data?.hours) return
+        const h = data.hours as Record<string, string>
+        setStoreHoursForm({
+          sun: h.sun ?? '', mon: h.mon ?? '', tue: h.tue ?? '', wed: h.wed ?? '',
+          thu: h.thu ?? '', fri: h.fri ?? '', sat: h.sat ?? '',
+        })
+      })
+      .finally(() => { if (!cancelled) setLoadingStoreHours(false) })
+    return () => { cancelled = true }
+  }, [isOps, storeHoursStoreId])
+
+  async function saveStoreHours() {
+    setSavingStoreHours(true)
+    try {
+      const res = await fetch(`/api/stores/${storeHoursStoreId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hours: storeHoursForm }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? 'Failed to save')
+      }
+      showToast('Store hours saved. Schedule will use these as default.')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save store hours')
+    } finally {
+      setSavingStoreHours(false)
+    }
+  }
 
   const isOps = currentUser.role === 'ops'
   const availableRoles = isOps ? ALL_ROLES : LEADER_ROLES
@@ -276,10 +320,12 @@ export function AdminPanel({ users: initialUsers, currentUser }: AdminPanelProps
                     storeId: role === 'ops' ? null : (currentUser.storeId ?? STORE_CONFIG[0].id) as number | null,
                   })
                 }}
-                className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
+                className="border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white dark:bg-slate-700 dark:text-slate-100 appearance-none cursor-pointer"
               >
                 {availableRoles.map((r) => (
-                  <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+                  <option key={r} value={r} className="bg-white dark:bg-slate-700 dark:text-slate-100">
+                    {r.charAt(0).toUpperCase() + r.slice(1)}
+                  </option>
                 ))}
               </select>
             </div>
@@ -492,6 +538,48 @@ export function AdminPanel({ users: initialUsers, currentUser }: AdminPanelProps
           </table>
         </div>
       </div>
+
+      {/* Store hours (ops only) */}
+      {isOps && (
+        <div className="mt-8 bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1 flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            Store hours (standard)
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+            Default hours per day for the schedule. Changes apply to the schedule view. For a specific week override, use “Edit hours for this week” on the Schedule page.
+          </p>
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">Store</label>
+              <select
+                value={storeHoursStoreId}
+                onChange={(e) => setStoreHoursStoreId(Number(e.target.value))}
+                className="border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] min-w-[180px]"
+              >
+                {STORE_CONFIG.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            {(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const).map((day) => (
+              <div key={day} className="w-28">
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">{day}</label>
+                <input
+                  type="text"
+                  value={storeHoursForm[day] ?? ''}
+                  onChange={(e) => setStoreHoursForm((prev) => ({ ...prev, [day]: e.target.value }))}
+                  placeholder="11AM–7PM"
+                  className="border border-slate-200 dark:border-slate-600 rounded-xl px-2 py-2 text-sm bg-white dark:bg-slate-700 dark:text-slate-100 placeholder-slate-400 w-full focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)]"
+                />
+              </div>
+            ))}
+            <Button onClick={saveStoreHours} isLoading={savingStoreHours} disabled={loadingStoreHours}>
+              Save hours
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

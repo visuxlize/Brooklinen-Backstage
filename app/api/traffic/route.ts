@@ -21,6 +21,12 @@ const postSchema = z.object({
   trafficCount: z.number().optional(),
 })
 
+const weekSchema = postSchema.omit({ storeId: true })
+const bulkPostSchema = z.object({
+  storeId: z.number().int(),
+  weeks: z.array(weekSchema),
+})
+
 export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -60,8 +66,51 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const validated = postSchema.parse(body)
 
+    // Bulk upload: { storeId, weeks: [{ weekStart, sun, mon, ... }] }
+    if (Array.isArray(body.weeks) && body.storeId != null) {
+      const bulk = bulkPostSchema.parse(body)
+      if (user.role === 'leader' && user.storeId !== bulk.storeId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      for (const w of bulk.weeks) {
+        const total = w.total ?? w.sun + w.mon + w.tue + w.wed + w.thu + w.fri + w.sat
+        await db
+          .insert(trafficWeekly)
+          .values({
+            storeId: bulk.storeId,
+            weekStart: w.weekStart,
+            sun: w.sun,
+            mon: w.mon,
+            tue: w.tue,
+            wed: w.wed,
+            thu: w.thu,
+            fri: w.fri,
+            sat: w.sat,
+            total,
+            trendMult: w.trendMult,
+            trafficCount: w.trafficCount,
+          })
+          .onConflictDoUpdate({
+            target: [trafficWeekly.storeId, trafficWeekly.weekStart],
+            set: {
+              sun: sql`excluded.sun`,
+              mon: sql`excluded.mon`,
+              tue: sql`excluded.tue`,
+              wed: sql`excluded.wed`,
+              thu: sql`excluded.thu`,
+              fri: sql`excluded.fri`,
+              sat: sql`excluded.sat`,
+              total: sql`excluded.total`,
+              trendMult: sql`excluded.trend_mult`,
+              trafficCount: sql`excluded.traffic_count`,
+            },
+          })
+      }
+      return NextResponse.json({ success: true, applied: bulk.weeks.length })
+    }
+
+    const validated = postSchema.parse(body)
     if (user.role === 'leader' && user.storeId !== validated.storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

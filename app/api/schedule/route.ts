@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { schedules, retailData } from '@/lib/db/schema'
-import { and, eq, gte, lte } from 'drizzle-orm'
+import { schedules, retailData, trafficWeekly, hourlyTraffic, scheduleWeekMeta } from '@/lib/db/schema'
+import { and, eq, gte, lte, desc } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { sql } from 'drizzle-orm'
+import {
+  getAllowableHours,
+  getBudgetHoursDaily,
+  getTrendingHoursDaily,
+  findClosestLYWeek,
+} from '@/lib/scheduleHours'
 
 const postSchema = z.object({
   storeId: z.number().int(),
@@ -100,7 +106,88 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ data, weeklyBudget, weeklyLy, dailyBudget, dailyLy })
+  // Budget hours & trending hours (allowable from weekly sales; trending from traffic)
+  const allowableHours = getAllowableHours(weeklyBudget)
+  const budgetHoursDaily = getBudgetHoursDaily(allowableHours)
+
+  const trafficWeeks = await db
+    .select()
+    .from(trafficWeekly)
+    .where(eq(trafficWeekly.storeId, storeId))
+    .orderBy(desc(trafficWeekly.weekStart))
+    .limit(53)
+  const latestTraffic = trafficWeeks[0]
+  const trendMult = latestTraffic?.trendMult != null ? Number(latestTraffic.trendMult) : 0
+  const trafficByWeek: Record<string, number[]> = {}
+  for (const w of trafficWeeks) {
+    const ws = typeof w.weekStart === 'string' ? w.weekStart : (w.weekStart as Date).toISOString().slice(0, 10)
+    trafficByWeek[ws] = [
+      Number(w.sun ?? 0),
+      Number(w.mon ?? 0),
+      Number(w.tue ?? 0),
+      Number(w.wed ?? 0),
+      Number(w.thu ?? 0),
+      Number(w.fri ?? 0),
+      Number(w.sat ?? 0),
+    ]
+  }
+  const availableWeeks = Object.keys(trafficByWeek).sort()
+  const lyWeekKey = findClosestLYWeek(weekStart, availableWeeks)
+  const lyTraffic = lyWeekKey ? trafficByWeek[lyWeekKey] : null
+  const trendingHoursDaily = getTrendingHoursDaily(
+    allowableHours,
+    lyTraffic ?? [0, 0, 0, 0, 0, 0, 0],
+    trendMult
+  )
+
+  // Peak window per day from hourly traffic (busiest 3-hour window)
+  const hourlyRows = await db
+    .select({ hour: hourlyTraffic.hour, dayOfWeek: hourlyTraffic.dayOfWeek, avgCount: hourlyTraffic.avgCount })
+    .from(hourlyTraffic)
+    .where(eq(hourlyTraffic.storeId, storeId))
+  const peakWindowByDay: string[] = ['—', '—', '—', '—', '—', '—', '—']
+  for (let dow = 0; dow < 7; dow++) {
+    const byHour = hourlyRows
+      .filter((r) => r.dayOfWeek === dow)
+      .map((r) => ({ hour: r.hour, avg: Number(r.avgCount ?? 0) }))
+      .sort((a, b) => b.avg - a.avg)
+    const top3 = byHour.slice(0, 3).map((x) => x.hour).sort((a, b) => a - b)
+    if (top3.length >= 2) {
+      const fmt = (h: number) => {
+        if (h === 0) return '12AM'
+        if (h < 12) return `${h}AM`
+        if (h === 12) return '12PM'
+        return `${h - 12}PM`
+      }
+      const endH = Math.min((top3[top3.length - 1] ?? 20) + 1, 20)
+      peakWindowByDay[dow] = `${fmt(top3[0])} – ${fmt(endH)}`
+    }
+  }
+
+  const [weekMetaRow] = await db
+    .select()
+    .from(scheduleWeekMeta)
+    .where(and(eq(scheduleWeekMeta.storeId, storeId), eq(scheduleWeekMeta.weekStart, weekStart)))
+    .limit(1)
+
+  const weekMeta = {
+    workload: weekMetaRow?.workload ?? null,
+    promotions: weekMetaRow?.promotions ?? null,
+    hoursOverride: weekMetaRow?.hoursOverride ?? null,
+  }
+
+  return NextResponse.json({
+    data,
+    weeklyBudget,
+    weeklyLy,
+    dailyBudget,
+    dailyLy,
+    allowableHours,
+    budgetHoursDaily,
+    trendingHoursDaily,
+    peakWindowByDay,
+    weekMeta,
+  })
 }
 
 export async function POST(request: Request) {

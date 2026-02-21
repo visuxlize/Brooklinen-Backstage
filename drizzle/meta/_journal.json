@@ -36,6 +36,34 @@
       "when": 1771656637265,
       "tag": "0004_busy_tattoo",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771657157498,
+      "tag": "0005_previous_stranger",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771657583367,
+      "tag": "0006_typical_shinobi_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1771697128991,
+      "tag": "0007_eminent_pride",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1771698213031,
+      "tag": "0008_slim_pandemic",
+      "breakpoints": true
     }
   ]
 }

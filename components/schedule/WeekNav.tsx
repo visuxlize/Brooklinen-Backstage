@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, Camera, Loader2, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileDown, Loader2, Check } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 
 interface WeekNavProps {
@@ -76,17 +76,17 @@ export function WeekNav({
       )}
       {!showDots && <div className="w-4" />}
 
-      {/* Email button */}
+      {/* Save as PDF */}
       {canEmail && (
         <button
           onClick={onEmail}
           disabled={emailState === 'loading' || emailState === 'sent'}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 text-sm font-medium transition-colors"
         >
           {emailState === 'loading' && <Loader2 className="w-4 h-4 animate-spin" />}
           {emailState === 'sent' && <Check className="w-4 h-4 text-green-600 dark:text-green-400" />}
-          {emailState === 'idle' && <Camera className="w-4 h-4" />}
-          {emailState === 'sent' ? 'Sent to all associates' : 'Email Schedule'}
+          {emailState === 'idle' && <FileDown className="w-4 h-4" />}
+          {emailState === 'sent' ? 'PDF saved' : 'Save as PDF'}
         </button>
       )}
     </div>

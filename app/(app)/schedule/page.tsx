@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { schedules, users, retailData } from '@/lib/db/schema'
+import { schedules, users, retailData, stores } from '@/lib/db/schema'
 import { and, eq, gte, lte } from 'drizzle-orm'
 import { getStore, STORE_CONFIG } from '@/lib/stores'
 import { ScheduleGrid } from '@/components/schedule/ScheduleGrid'
@@ -25,8 +25,13 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     storeId = user.storeId!
   }
 
-  const store = getStore(storeId)
-  if (!store) redirect('/schedule')
+  const staticStore = getStore(storeId)
+  if (!staticStore) redirect('/schedule')
+
+  const [storeRow] = await db.select().from(stores).where(eq(stores.id, storeId)).limit(1)
+  const store = storeRow
+    ? { id: storeRow.id, name: storeRow.name, city: storeRow.city, color: storeRow.color, hours: storeRow.hours as Record<string, string> }
+    : staticStore
 
   const canEdit = user.role === 'ops' || user.role === 'leader'
 

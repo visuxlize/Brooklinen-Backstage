@@ -4,13 +4,13 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format, addDays } from 'date-fns'
 import { getWeekStartByIndex, getTotalWeeks } from '@/lib/scheduleWeeks'
-import { Palmtree, RefreshCw, Thermometer, X, Trash2, Copy } from 'lucide-react'
+import { Palmtree, RefreshCw, Thermometer, X, Trash2, Copy, GripVertical } from 'lucide-react'
 import { ShiftCell } from './ShiftCell'
 import { WeekNav } from './WeekNav'
 import { HoursSummary } from './HoursSummary'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar } from '@/components/ui/Avatar'
-import { parseHours, SHIFT_TYPES } from '@/lib/shiftUtils'
+import { parseHours, SHIFT_TYPES, shiftFitsInWindow, formatTime24to12 } from '@/lib/shiftUtils'
 import type { StoreConfig } from '@/lib/stores'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
@@ -31,6 +31,11 @@ interface ScheduleGridProps {
   initialWeeklyLy?: number | null
   initialDailyBudget?: number[]
   initialDailyLy?: number[]
+  initialBudgetHoursDaily?: number[]
+  initialTrendingHoursDaily?: number[]
+  initialPeakWindowByDay?: string[]
+  initialAllowableHours?: number | null
+  initialWeekMeta?: { workload: Record<string, string> | null; promotions: Record<string, string> | null; hoursOverride: Record<string, string> | null }
 }
 
 const SHIFT_LEGEND = [
@@ -53,12 +58,25 @@ export function ScheduleGrid({
   initialWeeklyLy = null,
   initialDailyBudget,
   initialDailyLy,
+  initialBudgetHoursDaily,
+  initialTrendingHoursDaily,
+  initialPeakWindowByDay,
+  initialAllowableHours = null,
+  initialWeekMeta,
 }: ScheduleGridProps) {
   const [weekIdx, setWeekIdx] = useState(initialWeekIdx)
   const [gridData, setGridData] = useState<GridData>(initialData)
   const [loading, setLoading] = useState(false)
   const [dailyBudget, setDailyBudget] = useState<number[]>(initialDailyBudget ?? [0, 0, 0, 0, 0, 0, 0])
   const [dailyLy, setDailyLy] = useState<number[]>(initialDailyLy ?? [0, 0, 0, 0, 0, 0, 0])
+  const [budgetHoursDaily, setBudgetHoursDaily] = useState<number[]>(initialBudgetHoursDaily ?? [0, 0, 0, 0, 0, 0, 0])
+  const [trendingHoursDaily, setTrendingHoursDaily] = useState<number[]>(initialTrendingHoursDaily ?? [0, 0, 0, 0, 0, 0, 0])
+  const [peakWindowByDay, setPeakWindowByDay] = useState<string[]>(initialPeakWindowByDay ?? ['—', '—', '—', '—', '—', '—', '—'])
+  const [allowableHours, setAllowableHours] = useState<number | null>(initialAllowableHours ?? null)
+  const [workload, setWorkload] = useState<Record<string, string>>(initialWeekMeta?.workload ?? {})
+  const [promotions, setPromotions] = useState<Record<string, string>>(initialWeekMeta?.promotions ?? {})
+  const [hoursOverride, setHoursOverride] = useState<Record<string, string> | null>(initialWeekMeta?.hoursOverride ?? null)
+  const [savingMeta, setSavingMeta] = useState(false)
 
   useEffect(() => {
     setWeekIdx(initialWeekIdx)
@@ -81,6 +99,9 @@ export function ScheduleGrid({
   const [deleteState, setDeleteState] = useState<'idle' | 'loading'>('idle')
   const [weeklyBudget, setWeeklyBudget] = useState<number | null>(initialWeeklyBudget ?? null)
   const [weeklyLy, setWeeklyLy] = useState<number | null>(initialWeeklyLy ?? null)
+  const [weekAvailability, setWeekAvailability] = useState<Record<string, Record<number, { type: string; start?: string; end?: string }>> | null>(null)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const pathname = usePathname()
@@ -108,9 +129,12 @@ export function ScheduleGrid({
     async function fetchData() {
       setLoading(true)
       try {
-        const res = await fetch(`/api/schedule?storeId=${store.id}&weekStart=${weekStartStr}`)
-        if (res.ok) {
-          const json = await res.json()
+        const [scheduleRes, availabilityRes] = await Promise.all([
+          fetch(`/api/schedule?storeId=${store.id}&weekStart=${weekStartStr}`),
+          fetch(`/api/availability?storeId=${store.id}&weekStart=${weekStartStr}`),
+        ])
+        if (scheduleRes.ok) {
+          const json = await scheduleRes.json()
           const data = json.data ?? []
           const newGrid: GridData = {}
           for (const row of data) {
@@ -124,6 +148,24 @@ export function ScheduleGrid({
             setDailyBudget(json.dailyBudget)
           if (Array.isArray(json.dailyLy) && json.dailyLy.length === 7)
             setDailyLy(json.dailyLy)
+          if (Array.isArray(json.budgetHoursDaily) && json.budgetHoursDaily.length === 7)
+            setBudgetHoursDaily(json.budgetHoursDaily)
+          if (Array.isArray(json.trendingHoursDaily) && json.trendingHoursDaily.length === 7)
+            setTrendingHoursDaily(json.trendingHoursDaily)
+          if (Array.isArray(json.peakWindowByDay) && json.peakWindowByDay.length === 7)
+            setPeakWindowByDay(json.peakWindowByDay)
+          setAllowableHours(typeof json.allowableHours === 'number' ? json.allowableHours : null)
+          if (json.weekMeta && typeof json.weekMeta === 'object') {
+            setWorkload(typeof json.weekMeta.workload === 'object' && json.weekMeta.workload !== null ? json.weekMeta.workload : {})
+            setPromotions(typeof json.weekMeta.promotions === 'object' && json.weekMeta.promotions !== null ? json.weekMeta.promotions : {})
+            setHoursOverride(json.weekMeta.hoursOverride ?? null)
+          }
+        }
+        if (availabilityRes.ok) {
+          const av = await availabilityRes.json()
+          setWeekAvailability(av.weekAvailability ?? null)
+        } else {
+          setWeekAvailability(null)
         }
       } finally {
         setLoading(false)
@@ -134,6 +176,17 @@ export function ScheduleGrid({
 
   const handleCellChange = useCallback(
     async (employeeName: string, dayOfWeek: number, value: string) => {
+      const avail = weekAvailability?.[employeeName]?.[dayOfWeek]
+      if (avail?.type === 'na') return // cell is read-only, should not reach here
+      if (avail?.type === 'partial' && avail.start != null && avail.end != null) {
+        if (!shiftFitsInWindow(value, avail.start, avail.end)) {
+          const windowStr = `${formatTime24to12(avail.start)} – ${formatTime24to12(avail.end)}`
+          setToast(`Shift must fall within ${windowStr} (availability window).`)
+          setTimeout(() => setToast(null), 4000)
+          return
+        }
+      }
+
       // Optimistic update
       setGridData((prev) => ({
         ...prev,
@@ -163,52 +216,112 @@ export function ScheduleGrid({
         setTimeout(() => setToast(null), 3000)
       }
     },
-    [store.id, weekStartStr]
+    [store.id, weekStartStr, weekAvailability]
   )
 
-  async function handleEmail() {
-    if (!gridRef.current) return
+  function handleSavePdf() {
     setEmailState('loading')
     try {
-      const html2canvas = (await import('html2canvas')).default
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const canvas = await html2canvas(gridRef.current, { scale: 2, useCORS: true } as any)
-      const imageBase64 = canvas.toDataURL('image/png')
-
-      const res = await fetch('/api/schedule/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeId: store.id, weekStart: weekStartStr, imageBase64 }),
-      })
-      if (!res.ok) throw new Error('Failed to send')
+      const weekEnd = addDays(weekStart, 6)
+      const dateRange = `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}, ${format(weekStart, 'yyyy')}`
+      const dayHeaders = DAYS.map((day, i) => {
+        const d = addDays(weekStart, i)
+        return `<th style="padding:8px 6px;text-align:center;font-size:11px;border:1px solid #e2e8f0;">${day}<br/><span style="font-weight:400;color:#64748b;">${format(d, 'M/d')}</span></th>`
+      }).join('')
+      const budgetRow = [0, 1, 2, 3, 4, 5, 6].map((i) => `<td style="padding:6px;text-align:center;font-size:11px;border:1px solid #e2e8f0;">${formatCurrency(dailyBudget[i] ?? 0)}</td>`).join('')
+      const employeeRows = employees.map((emp) => {
+        const days = gridData[emp] ?? {}
+        const wtd = Object.values(days).reduce((sum, v) => sum + (v === 'N/A' ? 0 : parseHours(v)), 0)
+        const cells = [0, 1, 2, 3, 4, 5, 6].map((day) => {
+          const cellAvail = weekAvailability?.[emp]?.[day]
+          const display = cellAvail?.type === 'na' ? 'N/A' : (days[day] ?? '—')
+          return `<td style="padding:6px;text-align:center;font-size:11px;border:1px solid #e2e8f0;">${display}</td>`
+        }).join('')
+        return `<tr><td style="padding:6px 10px;font-size:11px;border:1px solid #e2e8f0;">${emp}</td>${cells}<td style="padding:6px;text-align:center;font-weight:600;font-size:11px;border:1px solid #e2e8f0;">${wtd}h</td></tr>`
+      }).join('')
+      const dayTotals = [0, 1, 2, 3, 4, 5, 6].map((day) =>
+        employees.reduce((sum, emp) => sum + parseHours((gridData[emp] ?? {})[day] === 'N/A' ? '' : (gridData[emp] ?? {})[day] ?? ''), 0)
+      )
+      const actualRow = dayTotals.map((h) => `<td style="padding:6px;text-align:center;font-weight:600;font-size:11px;border:1px solid #e2e8f0;">${h > 0 ? h + 'h' : '—'}</td>`).join('')
+      const grandTotal = dayTotals.reduce((a, b) => a + b, 0)
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule ${dateRange}</title><style>
+        body { font-family: system-ui, -apple-system, sans-serif; color: #0f172a; padding: 24px; margin: 0; }
+        h1 { font-size: 18px; margin: 0 0 4px 0; }
+        .meta { font-size: 12px; color: #64748b; margin-bottom: 16px; }
+        table { border-collapse: collapse; width: 100%; max-width: 900px; }
+        thead th { background: #1e3a5f; color: white; font-weight: 600; }
+        .footer-row td { background: #1e3a5f; color: white; font-weight: 600; }
+        @media print { body { padding: 12px; } }
+      </style></head><body>
+        <h1>${store.name}</h1>
+        <p class="meta">${dateRange} · Week schedule</p>
+        <table>
+          <thead><tr><th style="padding:10px;text-align:left;width:140px;">Employee</th>${dayHeaders}<th style="padding:8px;text-align:center;width:56px;">WTD</th></tr>
+          <tr><th style="padding:6px 10px;text-align:left;font-size:10px;color:#64748b;">Daily budget</th>${budgetRow}<th></th></tr></thead>
+          <tbody>${employeeRows}</tbody>
+          <tfoot><tr class="footer-row"><td style="padding:8px 10px;">Actual hours</td>${actualRow}<td style="padding:8px;text-align:center;">${grandTotal}h</td></tr></tfoot>
+        </table>
+      </body></html>`
+      const w = window.open('', '_blank', 'noopener,noreferrer')
+      if (w) {
+        w.document.write(html)
+        w.document.close()
+        w.focus()
+        setTimeout(() => {
+          w.print()
+          w.onafterprint = () => w.close()
+        }, 300)
+      }
       setEmailState('sent')
-      setTimeout(() => setEmailState('idle'), 3000)
+      setTimeout(() => setEmailState('idle'), 2000)
     } catch {
       setEmailState('idle')
-      setToast('Failed to send email.')
+      setToast('Failed to open print view.')
       setTimeout(() => setToast(null), 3000)
     }
   }
 
-  // Compute stats
+  // Compute stats (treat N/A as 0 hours, don't count N/A-only days toward staff)
   const allHours = employees.map((emp) => {
     const days = gridData[emp] ?? {}
-    return Object.values(days).reduce((sum, v) => sum + parseHours(v), 0)
+    return Object.values(days).reduce((sum, v) => sum + (v === 'N/A' ? 0 : parseHours(v)), 0)
   })
   const totalHours = allHours.reduce((a, b) => a + b, 0)
   const staffCount = employees.filter((emp) => {
     const days = gridData[emp] ?? {}
-    return Object.values(days).some((v) => v && v !== 'OFF')
+    return Object.values(days).some((v) => v && v !== 'OFF' && v !== 'N/A')
   }).length
   const avgPerPerson = staffCount > 0 ? Math.round(totalHours / staffCount) : 0
-  const daysCovered = DAYS.filter((_, i) =>
-    employees.some((emp) => {
-      const v = gridData[emp]?.[i]
-      return v && v !== 'OFF' && v !== ''
-    })
-  ).length
 
-  const storeHours = store.hours as Record<string, string>
+  const storeHours: Record<string, string> = hoursOverride && Object.keys(hoursOverride).length > 0
+    ? { ...(store.hours as Record<string, string>), ...hoursOverride }
+    : (store.hours as Record<string, string>)
+
+  async function saveWeekMeta(patch: { workload?: Record<string, string>; promotions?: Record<string, string>; hoursOverride?: Record<string, string> | null }) {
+    setSavingMeta(true)
+    try {
+      const res = await fetch('/api/schedule-meta', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: store.id,
+          weekStart: weekStartStr,
+          ...patch,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      if (patch.workload !== undefined) setWorkload(patch.workload)
+      if (patch.promotions !== undefined) setPromotions(patch.promotions)
+      if (patch.hoursOverride !== undefined) setHoursOverride(patch.hoursOverride)
+      setToast('Saved.')
+      setTimeout(() => setToast(null), 2000)
+    } catch {
+      setToast('Failed to save.')
+      setTimeout(() => setToast(null), 3000)
+    } finally {
+      setSavingMeta(false)
+    }
+  }
 
   async function handleDeleteSchedule() {
     if (!confirm('Delete the entire schedule for this week? This cannot be undone.')) return
@@ -248,8 +361,48 @@ export function ScheduleGrid({
     setTimeout(() => setToast(null), 3000)
   }
 
+  function reorderEmployees(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return
+    setEmployees((prev) => {
+      const arr = [...prev]
+      const [removed] = arr.splice(fromIndex, 1)
+      arr.splice(toIndex, 0, removed)
+      return arr
+    })
+  }
+
+  function handleDragStart(e: React.DragEvent, index: number) {
+    setDraggedIndex(index)
+    e.dataTransfer.setData('text/plain', String(index))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverIndex(index)
+  }
+
+  function handleDragLeave() {
+    setDragOverIndex(null)
+  }
+
+  function handleDrop(e: React.DragEvent, toIndex: number) {
+    e.preventDefault()
+    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10)
+    if (Number.isNaN(fromIndex) || fromIndex === toIndex) return
+    reorderEmployees(fromIndex, toIndex)
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  function handleDragEnd() {
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
   return (
-    <div className="p-4 flex flex-col min-h-[calc(100vh-3rem)]">
+    <div className="p-3 sm:p-4 flex flex-col min-h-[calc(100vh-3rem)] max-w-full">
       {/* Week navigation - compact */}
       <WeekNav
         weekIdx={weekIdx}
@@ -267,11 +420,11 @@ export function ScheduleGrid({
         }}
         canEmail={canEdit}
         emailState={emailState}
-        onEmail={handleEmail}
+        onEmail={handleSavePdf}
       />
 
-      {/* Weekly budget goals & LY */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-3">
+      {/* Weekly budget goals & LY — responsive cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-3">
         <StatCard
           label="Weekly budget goal"
           value={formatCurrency(weeklyBudget)}
@@ -295,11 +448,6 @@ export function ScheduleGrid({
         <StatCard
           label="Avg Per Person"
           value={`${avgPerPerson}h`}
-          accentColor={store.color}
-        />
-        <StatCard
-          label="Days Covered"
-          value={`${daysCovered} / 7`}
           accentColor={store.color}
         />
       </div>
@@ -353,11 +501,47 @@ export function ScheduleGrid({
         )}
       </div>
 
-      {/* Schedule grid - flex-1 so it takes remaining space */}
+      {/* Edit hours for this week (override) - only when canEdit */}
+      {canEdit && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-slate-500 dark:text-slate-400">Store hours this week:</span>
+          {(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const).map((day) => (
+            <span key={day} className="flex items-center gap-1">
+              <span className="text-slate-400 dark:text-slate-500 capitalize w-8">{day}</span>
+              <input
+                type="text"
+                value={hoursOverride?.[day] ?? storeHours[day] ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  const base = (store.hours as Record<string, string>) ?? {}
+                  setHoursOverride((prev) => ({ ...base, ...(prev ?? {}), [day]: v }))
+                }}
+                onBlur={() => {
+                  const next = hoursOverride && Object.keys(hoursOverride).length > 0 ? hoursOverride : null
+                  saveWeekMeta({ hoursOverride: next })
+                }}
+                placeholder={(store.hours as Record<string, string>)?.[day] ?? '—'}
+                className="w-24 px-2 py-1 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs"
+              />
+            </span>
+          ))}
+          {(hoursOverride && Object.keys(hoursOverride).length > 0) && (
+            <button
+              type="button"
+              onClick={() => { setHoursOverride(null); saveWeekMeta({ hoursOverride: null }) }}
+              className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline"
+            >
+              Reset to default
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Schedule grid - scroll horizontally on small screens */}
       <div
         id="schedule-grid"
         ref={gridRef}
-        className="flex-1 min-h-0 bg-[var(--card)] dark:bg-slate-800/50 rounded-xl shadow-sm dark:shadow-none border border-[var(--border)] overflow-auto"
+        className="flex-1 min-h-0 bg-[var(--card)] dark:bg-slate-800/50 rounded-xl shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-600 overflow-x-auto overflow-y-auto -mx-1 px-1 sm:mx-0 sm:px-0"
       >
         {loading ? (
           <div className="p-8 space-y-3">
@@ -369,7 +553,7 @@ export function ScheduleGrid({
           <table className="w-full min-w-[700px] border-collapse">
             <thead>
               <tr className="bg-[var(--brand-navy)] text-white border-b-0">
-                <th className="text-left px-4 py-3 w-44 rounded-tl-lg">
+                <th className="text-left px-4 py-3 w-52 rounded-tl-lg">
                   <span className="text-xs font-semibold uppercase tracking-widest text-white/80">Employee</span>
                 </th>
                 {DAYS.map((day, i) => {
@@ -388,7 +572,7 @@ export function ScheduleGrid({
                 </th>
               </tr>
               <tr className="bg-slate-100 dark:bg-slate-700/80 border-b border-slate-200 dark:border-slate-600">
-                <th className="text-left px-4 py-1.5 w-44 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <th className="text-left px-4 py-1.5 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Daily budget goal
                 </th>
                 {[0, 1, 2, 3, 4, 5, 6].map((i) => (
@@ -401,7 +585,7 @@ export function ScheduleGrid({
                 </th>
               </tr>
               <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-600">
-                <th className="text-left px-4 py-1.5 w-44 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <th className="text-left px-4 py-1.5 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Daily LY budget
                 </th>
                 {[0, 1, 2, 3, 4, 5, 6].map((i) => (
@@ -413,37 +597,122 @@ export function ScheduleGrid({
                   {formatCurrency(weeklyLy)}
                 </th>
               </tr>
+              <tr className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
+                <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
+                  Promotions
+                </td>
+                {DAY_KEYS.map((dayKey) => (
+                  <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80">
+                    {canEdit ? (
+                      <input
+                        type="text"
+                        value={promotions[dayKey] ?? ''}
+                        onChange={(e) => setPromotions((prev) => ({ ...prev, [dayKey]: e.target.value }))}
+                        onBlur={() => saveWeekMeta({ promotions })}
+                        placeholder="—"
+                        className="w-full min-w-0 px-2 py-1.5 text-sm text-center border border-transparent rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none"
+                      />
+                    ) : (
+                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center">{promotions[dayKey]?.trim() || '—'}</span>
+                    )}
+                  </td>
+                ))}
+                <td className="px-2 py-1.5 w-12 border-l border-slate-100 dark:border-slate-600/80" />
+              </tr>
+              <tr className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
+                <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
+                  Workload
+                </td>
+                {DAY_KEYS.map((dayKey) => (
+                  <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80">
+                    {canEdit ? (
+                      <input
+                        type="text"
+                        value={workload[dayKey] ?? ''}
+                        onChange={(e) => setWorkload((prev) => ({ ...prev, [dayKey]: e.target.value }))}
+                        onBlur={() => saveWeekMeta({ workload })}
+                        placeholder="—"
+                        className="w-full min-w-0 px-2 py-1.5 text-sm text-center border border-transparent rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none"
+                      />
+                    ) : (
+                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center">{workload[dayKey]?.trim() || '—'}</span>
+                    )}
+                  </td>
+                ))}
+                <td className="px-2 py-1.5 w-12 border-l border-slate-100 dark:border-slate-600/80" />
+              </tr>
             </thead>
             <tbody>
-              {employees.map((emp) => {
+              {employees.map((emp, index) => {
                 const empData = gridData[emp] ?? {}
                 const weekTotal = Object.values(empData).reduce(
                   (sum, v) => sum + parseHours(v),
                   0
                 )
                 const isOT = weekTotal > 40
+                const isDragging = draggedIndex === index
+                const isDropTarget = dragOverIndex === index
 
                 return (
-                  <tr key={emp} className="border-b border-slate-50 dark:border-slate-700/80 hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors">
+                  <tr
+                    key={emp}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, index)}
+                    className={`border-b border-slate-50 dark:border-slate-700/80 transition-colors ${
+                      isDragging ? 'opacity-50 bg-slate-100 dark:bg-slate-700/50' : 'hover:bg-slate-50/50 dark:hover:bg-slate-700/20'
+                    } ${isDropTarget ? 'ring-1 ring-inset ring-[var(--brand-navy)] bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
+                  >
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
+                        <div
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, index)}
+                          onDragEnd={handleDragEnd}
+                          className="shrink-0 p-1 rounded cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 touch-none"
+                          title="Drag to reorder"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
                         <Avatar name={emp} size="sm" color={store.color} />
                         <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{emp}</span>
                       </div>
                     </td>
                     {[0, 1, 2, 3, 4, 5, 6].map((day) => {
                       const isCopySource = copySource?.employeeName === emp && copySource?.dayOfWeek === day
+                      const cellAvail = weekAvailability?.[emp]?.[day]
+                      const isNa = cellAvail?.type === 'na'
+                      const cellValue = empData[day] ?? ''
+                      const hasPartialConflict =
+                        cellAvail?.type === 'partial' &&
+                        cellAvail.start != null &&
+                        cellAvail.end != null &&
+                        !shiftFitsInWindow(cellValue, cellAvail.start, cellAvail.end)
+                      const readOnly = !canEdit || copyMode || isNa
+                      const window12h =
+                        cellAvail?.start != null && cellAvail?.end != null
+                          ? `${formatTime24to12(cellAvail.start)} – ${formatTime24to12(cellAvail.end)}`
+                          : ''
+                      const cellTitle =
+                        hasPartialConflict
+                          ? `Outside availability — must be within ${window12h}`
+                          : cellAvail?.type === 'partial' && window12h
+                            ? `Available ${window12h}`
+                            : isNa
+                              ? 'N/A — not available'
+                              : undefined
                       return (
                         <td
                           key={day}
-                          className={`px-1.5 py-1.5 ${isCopySource ? 'ring-2 ring-[var(--brand-navy)] ring-offset-1 rounded-lg' : ''}`}
+                          className={`px-1.5 py-1.5 ${isCopySource ? 'ring-2 ring-[var(--brand-navy)] ring-offset-1 rounded-lg' : ''} ${isNa ? 'opacity-75' : ''} ${hasPartialConflict ? 'ring-2 ring-red-500 ring-offset-1 rounded-lg bg-red-50/80 dark:bg-red-900/20' : ''}`}
                           onClick={canEdit && copyMode ? () => handleCellClickForCopy(emp, day) : undefined}
+                          title={cellTitle}
                         >
                           <div className={canEdit && copyMode ? 'pointer-events-none' : ''}>
                             <ShiftCell
-                              value={empData[day] ?? ''}
+                              value={isNa ? 'N/A' : cellValue}
                               onChange={(val) => handleCellChange(emp, day, val)}
-                              readOnly={!canEdit || copyMode}
+                              readOnly={readOnly}
                               storeColor={store.color}
                             />
                           </div>
@@ -466,7 +735,15 @@ export function ScheduleGrid({
               })}
             </tbody>
             <tfoot>
-              <HoursSummary employees={employees} data={gridData} storeColor={store.color} />
+              <HoursSummary
+                employees={employees}
+                data={gridData}
+                storeColor={store.color}
+                budgetHoursDaily={budgetHoursDaily}
+                trendingHoursDaily={trendingHoursDaily}
+                peakWindowByDay={peakWindowByDay}
+                allowableHours={allowableHours}
+              />
             </tfoot>
           </table>
         )}
