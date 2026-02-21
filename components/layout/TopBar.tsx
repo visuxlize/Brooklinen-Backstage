@@ -26,6 +26,7 @@ function buildTabs(role: string, storeId: number | null, pendingRtoCount: number
   if (role === 'ops' || role === 'leader') {
     return [
       { label: 'Schedule', href: `/schedule${storeParam}` },
+      { label: 'Availability', href: `/availability${storeParam}` },
       { label: 'Traffic', href: `/traffic${storeParam}` },
       { label: 'RTO', href: `/rto${storeParam}`, badge: pendingRtoCount },
     ]

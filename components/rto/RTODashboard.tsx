@@ -83,13 +83,13 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
 
   const typeVariant = (type: string) => {
     const map: Record<string, string> = {
-      RTO: 'bg-slate-100 text-slate-700',
-      PTO: 'bg-blue-50 text-blue-800',
-      Partial: 'bg-violet-50 text-violet-800',
-      COMP: 'bg-violet-50 text-violet-800',
-      Sick: 'bg-amber-50 text-amber-800',
+      RTO: 'bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-slate-200',
+      PTO: 'bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+      Partial: 'bg-violet-50 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+      COMP: 'bg-violet-50 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+      Sick: 'bg-amber-50 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
     }
-    return map[type] ?? 'bg-slate-100 text-slate-700'
+    return map[type] ?? 'bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-slate-200'
   }
 
   const typeLabel = (type: string) =>
@@ -100,28 +100,28 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
     const state = actionState[req.id] ?? 'idle'
 
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
         <div className="flex items-start gap-3 mb-3">
           <Avatar name={req.employeeName} size="md" color={store.color} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-slate-900 text-sm">{req.employeeName}</span>
+              <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{req.employeeName}</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typeVariant(req.type)}`}>
                 {typeLabel(req.type)}
               </span>
               {!showActions && <RTOStatusBadge status={req.status as 'approved' | 'denied' | 'pending'} />}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">{req.requestedDays}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{req.requestedDays}</div>
             {req.partialTime && (
-              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                <span className="text-slate-400">Time:</span> {req.partialTime}
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                <span className="text-slate-400 dark:text-slate-500">Time:</span> {req.partialTime}
               </div>
             )}
             {req.note && (
-              <div className="text-xs text-slate-500 mt-1 italic">&ldquo;{req.note}&rdquo;</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">&ldquo;{req.note}&rdquo;</div>
             )}
             {req.leaderNote && !showActions && (
-              <div className="text-xs text-slate-600 mt-1 bg-slate-50 rounded-lg px-2 py-1">
+              <div className="text-xs text-slate-600 dark:text-slate-300 mt-1 bg-slate-50 dark:bg-slate-700/50 rounded-lg px-2 py-1">
                 Leader note: {req.leaderNote}
               </div>
             )}
@@ -137,7 +137,7 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
                   value={noteInputs[req.id] ?? ''}
                   onChange={(e) => setNoteInputs((prev) => ({ ...prev, [req.id]: e.target.value }))}
                   placeholder="Optional note to employee..."
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full mb-2"
+                  className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full mb-2"
                 />
                 <div className="flex gap-2">
                   <Button
@@ -217,20 +217,20 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">RTO Management</h1>
-        <p className="text-sm text-slate-500 mt-1">{store.name} · {store.city}</p>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">RTO Management</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{store.name} · {store.city}</p>
       </div>
 
       {/* Shareable link */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6 flex items-center gap-3 flex-wrap">
+      <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-4 mb-6 flex items-center gap-3 flex-wrap">
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1">
+          <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-400 mb-1">
             Associate Submission Link
           </div>
-          <div className="text-sm text-slate-600 font-mono truncate">{shareUrl}</div>
+          <div className="text-sm text-slate-600 dark:text-slate-200 font-mono truncate">{shareUrl}</div>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleCopyLink}>
-          {copied ? <CheckCheck className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+        <Button variant="ghost" size="sm" onClick={handleCopyLink} className="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+          {copied ? <CheckCheck className="w-4 h-4 text-green-600 dark:text-green-400" /> : <Copy className="w-4 h-4" />}
           {copied ? 'Copied!' : 'Copy'}
         </Button>
       </div>
@@ -239,7 +239,7 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
         {/* Pending */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-sm font-semibold text-slate-800">Pending</h2>
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Pending</h2>
             {pending.length > 0 && (
               <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                 {pending.length}
@@ -249,11 +249,11 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-32 bg-slate-100 rounded-2xl animate-pulse" />
+                <div key={i} className="h-32 bg-slate-100 dark:bg-slate-700 rounded-2xl animate-pulse" />
               ))}
             </div>
           ) : pending.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center text-slate-400 text-sm">
+            <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-8 text-center text-slate-400 dark:text-slate-400 text-sm">
               No pending requests
             </div>
           ) : (
@@ -267,15 +267,15 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
 
         {/* Resolved */}
         <div>
-          <h2 className="text-sm font-semibold text-slate-800 mb-4">Resolved</h2>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Resolved</h2>
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="h-28 bg-slate-100 rounded-2xl animate-pulse" />
+                <div key={i} className="h-28 bg-slate-100 dark:bg-slate-700 rounded-2xl animate-pulse" />
               ))}
             </div>
           ) : resolved.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center text-slate-400 text-sm">
+            <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-8 text-center text-slate-400 dark:text-slate-400 text-sm">
               No resolved requests
             </div>
           ) : (

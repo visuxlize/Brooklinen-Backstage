@@ -87,11 +87,11 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
   if (success) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center">
-          <CheckCircle className="w-8 h-8 text-green-600" />
+        <div className="w-16 h-16 bg-green-50 dark:bg-green-900/40 rounded-full flex items-center justify-center">
+          <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900">Request Submitted</h2>
-        <p className="text-slate-500 max-w-sm text-sm">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Request Submitted</h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-sm text-sm">
           Your request has been submitted. Your store leader will review it and you will receive an email notification.
         </p>
       </div>
@@ -117,7 +117,7 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
           value={form.employeeName}
           onChange={(e) => setForm({ ...form, employeeName: e.target.value })}
           placeholder="Your full name"
-          className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
+          className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
         />
       </div>
 
@@ -129,7 +129,7 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
         <select
           value={form.storeId}
           onChange={(e) => setForm({ ...form, storeId: parseInt(e.target.value) })}
-          className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
+          className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
         >
           {STORE_CONFIG.map((s) => (
             <option key={s.id} value={s.id}>
@@ -152,12 +152,12 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
               onClick={() => setForm({ ...form, type: value })}
               className={`text-left px-4 py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
                 form.type === value
-                  ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)]/5 text-[var(--brand-navy)]'
-                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100'
+                  ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)]/5 text-[var(--brand-navy)] dark:bg-[var(--brand-navy)]/20 dark:text-blue-200'
+                  : 'border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-100 dark:hover:bg-slate-600'
               }`}
             >
               <span className="block">{label}</span>
-              <span className="text-xs font-normal text-slate-500 mt-0.5 block">{description}</span>
+              <span className="text-xs font-normal text-slate-500 dark:text-slate-400 mt-0.5 block">{description}</span>
             </button>
           ))}
         </div>
@@ -177,14 +177,14 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
           value={form.requestedDays}
           onChange={(e) => setForm({ ...form, requestedDays: e.target.value })}
           placeholder="e.g. Mar 15  or  Mar 22–23"
-          className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
+          className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
         />
       </div>
 
       {/* Partial time: required when type is Partial */}
       {isPartial && (
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-          <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+        <div className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl p-4 space-y-3">
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" />
             Time needed (required for Partial Time Off)
           </label>
@@ -197,7 +197,7 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
                 value={form.partialStart}
                 onChange={(e) => setForm({ ...form, partialStart: e.target.value })}
                 placeholder="e.g. 10:00 AM"
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
+                className="border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
             </div>
             <div>
@@ -208,7 +208,7 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
                 value={form.partialEnd}
                 onChange={(e) => setForm({ ...form, partialEnd: e.target.value })}
                 placeholder="e.g. 2:00 PM"
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
+                className="border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white dark:bg-slate-700 dark:text-white dark:placeholder-slate-400"
               />
             </div>
           </div>
@@ -226,14 +226,14 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
           value={form.employeeEmail}
           onChange={(e) => setForm({ ...form, employeeEmail: e.target.value })}
           placeholder="you@example.com"
-          className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
+          className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
         />
       </div>
 
       {/* Notes */}
       <div>
         <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
-          Notes <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
+          Notes <span className="text-slate-300 dark:text-slate-500 font-normal normal-case tracking-normal">optional</span>
         </label>
         <textarea
           value={form.note}

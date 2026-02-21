@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format, addDays } from 'date-fns'
 import { getWeekStartByIndex, getTotalWeeks } from '@/lib/scheduleWeeks'
-import { Palmtree, RefreshCw, Thermometer, X, Trash2, Copy, Sparkles } from 'lucide-react'
+import { Palmtree, RefreshCw, Thermometer, X, Trash2, Copy } from 'lucide-react'
 import { ShiftCell } from './ShiftCell'
 import { WeekNav } from './WeekNav'
 import { HoursSummary } from './HoursSummary'
@@ -79,7 +79,6 @@ export function ScheduleGrid({
   const [copySource, setCopySource] = useState<{ employeeName: string; dayOfWeek: number } | null>(null)
   const [copyMode, setCopyMode] = useState(false)
   const [deleteState, setDeleteState] = useState<'idle' | 'loading'>('idle')
-  const [predictState, setPredictState] = useState<'idle' | 'loading'>('idle')
   const [weeklyBudget, setWeeklyBudget] = useState<number | null>(initialWeeklyBudget ?? null)
   const [weeklyLy, setWeeklyLy] = useState<number | null>(initialWeeklyLy ?? null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -227,36 +226,6 @@ export function ScheduleGrid({
     }
   }
 
-  async function handlePredict() {
-    setPredictState('loading')
-    try {
-      const res = await fetch('/api/schedule/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeId: store.id, weekStart: weekStartStr, maxHoursPerPerson: 40 }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed to predict')
-      const res2 = await fetch(`/api/schedule?storeId=${store.id}&weekStart=${weekStartStr}`)
-      if (res2.ok) {
-        const { data: rows } = await res2.json()
-        const newGrid: GridData = {}
-        for (const row of rows) {
-          if (!newGrid[row.employeeName]) newGrid[row.employeeName] = {}
-          newGrid[row.employeeName][row.dayOfWeek] = row.shiftValue ?? ''
-        }
-        setGridData(newGrid)
-      }
-      setToast('Schedule predicted from trends and allowable hours.')
-      setTimeout(() => setToast(null), 3000)
-    } catch (err) {
-      setToast(err instanceof Error ? err.message : 'Predict failed.')
-      setTimeout(() => setToast(null), 3000)
-    } finally {
-      setPredictState('idle')
-    }
-  }
-
   function handleCellClickForCopy(employeeName: string, dayOfWeek: number) {
     if (!copySource) {
       setCopySource({ employeeName, dayOfWeek })
@@ -374,15 +343,6 @@ export function ScheduleGrid({
               <Copy className="w-3 h-3" />
               Copy cell
               {copySource && <span className="opacity-80">→ click destination</span>}
-            </button>
-            <button
-              type="button"
-              onClick={handlePredict}
-              disabled={predictState === 'loading'}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 disabled:opacity-50"
-            >
-              <Sparkles className="w-3 h-3" />
-              {predictState === 'loading' ? 'Predicting…' : 'Predict schedule'}
             </button>
             {!copyMode && (
               <span className="ml-auto text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">

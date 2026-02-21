@@ -97,6 +97,25 @@ export const retailData = pgTable(
   })
 )
 
+/** Employee availability per store. One row per user per store per effective date. Use latest effective_date <= schedule date. */
+export const availability = pgTable(
+  'availability',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    storeId: integer('store_id').notNull().references(() => stores.id),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    effectiveDate: date('effective_date').notNull(),
+    type: text('type').notNull(), // 'na' | 'open' | 'partial'
+    /** For type=partial: { "0": ["14:00","21:00"], "1": ["14:00","21:00"], ... } day 0=Sun..6=Sat. [start, end] in HH:mm. Missing day = not available. */
+    partialHours: jsonb('partial_hours'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    availabilityUnique: unique('availability_store_user_effective').on(t.storeId, t.userId, t.effectiveDate),
+  })
+)
+
 // Type exports
 export type Store = typeof stores.$inferSelect
 export type User = typeof users.$inferSelect
@@ -106,3 +125,4 @@ export type TrafficWeekly = typeof trafficWeekly.$inferSelect
 export type HourlyTraffic = typeof hourlyTraffic.$inferSelect
 export type RtoRequest = typeof rtoRequests.$inferSelect
 export type RetailData = typeof retailData.$inferSelect
+export type Availability = typeof availability.$inferSelect

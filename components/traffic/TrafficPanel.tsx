@@ -170,16 +170,16 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Bar chart */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-semibold text-slate-800 mb-4">Daily Traffic Breakdown</h2>
+        <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Daily Traffic Breakdown</h2>
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 7 }).map((_, i) => (
-                <div key={i} className="h-8 bg-slate-100 rounded animate-pulse" />
+                <div key={i} className="h-8 bg-slate-100 dark:bg-slate-700 rounded animate-pulse" />
               ))}
             </div>
           ) : !latest ? (
-            <div className="text-center py-12 text-slate-400 text-sm">No traffic data yet</div>
+            <div className="text-center py-12 text-slate-400 dark:text-slate-400 text-sm">No traffic data yet</div>
           ) : (
             <div className="space-y-2">
               {DAYS.map((day, i) => {
@@ -188,14 +188,14 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                 const pct = weekMax > 0 ? (val / weekMax) * 100 : 0
                 return (
                   <div key={day} className="flex items-center gap-3">
-                    <span className="text-xs font-medium text-slate-500 w-8">{day}</span>
-                    <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400 w-8">{day}</span>
+                    <div className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-6 overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                         style={{ width: `${pct}%`, backgroundColor: store.color }}
                       />
                     </div>
-                    <span className="text-xs font-semibold text-slate-700 w-16 text-right">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 w-16 text-right">
                       {val.toLocaleString()}
                     </span>
                   </div>
@@ -206,17 +206,17 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         </div>
 
         {/* Paste zone */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-semibold text-slate-800 mb-1">Paste Trend Data</h2>
-          <p className="text-xs text-slate-400 mb-3">
-            Format: <code className="bg-slate-50 px-1 rounded">sun: 120</code> or tab-separated. One per line.
+        <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Paste Trend Data</h2>
+          <p className="text-xs text-slate-400 dark:text-slate-400 mb-3">
+            Format: <code className="bg-slate-50 dark:bg-slate-700 px-1 rounded">sun: 120</code> or tab-separated. One per line.
           </p>
-          <div className="border-2 border-dashed border-blue-200 rounded-xl bg-blue-50/30 p-3">
+          <div className="border-2 border-dashed border-blue-200 dark:border-blue-600 rounded-xl bg-blue-50/30 dark:bg-slate-800/50 p-3">
             <textarea
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               placeholder={`sun: 120\nmon: 95\ntue: 88\nwed: 102\nthu: 115\nfri: 140\nsat: 180\ntrend: 1.0832\ncount: 840`}
-              className="w-full h-48 font-mono text-xs bg-transparent resize-none focus:outline-none text-slate-700 placeholder-slate-300"
+              className="w-full h-48 font-mono text-xs bg-transparent resize-none focus:outline-none text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-500"
             />
           </div>
           <button
@@ -233,31 +233,31 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
 
       {/* Historical table */}
       {weeklyData.length > 0 && (
-        <div className="mt-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-semibold text-slate-800 mb-4">Historical Weekly Data</h2>
+        <div className="mt-6 bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Historical Weekly Data</h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-xs">
               <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                <tr className="border-b border-slate-100 dark:border-slate-600">
+                  <th className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-300">
                     Week
                   </th>
                   {DAYS.map((d) => (
-                    <th key={d} className="text-center py-2 px-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    <th key={d} className="text-center py-2 px-2 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-300">
                       {d}
                     </th>
                   ))}
-                  <th className="text-center py-2 px-3 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                  <th className="text-center py-2 px-3 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-300">
                     Total
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {weeklyData.slice(0, 10).map((row) => (
-                  <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="py-2 px-3 font-medium text-slate-700">{row.weekStart}</td>
+                  <tr key={row.id} className="border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                    <td className="py-2 px-3 font-medium text-slate-700 dark:text-slate-200">{row.weekStart}</td>
                     {DAY_KEYS.map((k) => (
-                      <td key={k} className="py-2 px-2 text-center text-slate-600">
+                      <td key={k} className="py-2 px-2 text-center text-slate-600 dark:text-slate-300">
                         {Number(row[k] ?? 0).toLocaleString()}
                       </td>
                     ))}
