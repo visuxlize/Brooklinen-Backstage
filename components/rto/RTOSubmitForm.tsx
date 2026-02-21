@@ -1,12 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Clock, Calendar } from 'lucide-react'
 import { STORE_CONFIG } from '@/lib/stores'
 import { Button } from '@/components/ui/Button'
 
-const REQUEST_TYPES = ['RTO', 'PTO', 'COMP', 'Sick'] as const
-type RequestType = (typeof REQUEST_TYPES)[number]
+const REQUEST_TYPES = [
+  { value: 'RTO' as const, label: 'RTO', description: 'Requested time off' },
+  { value: 'PTO' as const, label: 'PTO', description: 'Paid time off' },
+  { value: 'Partial' as const, label: 'Partial Time Off', description: 'Specify start & end times' },
+] as const
+type RequestType = (typeof REQUEST_TYPES)[number]['value']
 
 interface RTOSubmitFormProps {
   defaultStoreId?: number
@@ -18,7 +22,8 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
     storeId: defaultStoreId ?? STORE_CONFIG[0].id,
     type: 'RTO' as RequestType,
     requestedDays: '',
-    partialTime: '',
+    partialStart: '',
+    partialEnd: '',
     employeeEmail: '',
     note: '',
   })
@@ -26,8 +31,15 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const isPartial = form.type === 'Partial'
+  const partialTimeDisplay = [form.partialStart, form.partialEnd].filter(Boolean).join(' – ')
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (isPartial && (!form.partialStart.trim() || !form.partialEnd.trim())) {
+      setError('Partial Time Off requires both start and end times.')
+      return
+    }
     setSubmitting(true)
     setError(null)
 
@@ -41,7 +53,7 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
           employeeEmail: form.employeeEmail,
           requestedDays: form.requestedDays,
           type: form.type,
-          partialTime: form.partialTime || undefined,
+          partialTime: isPartial ? partialTimeDisplay : undefined,
           note: form.note || undefined,
         }),
       })
@@ -59,7 +71,8 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
           storeId: defaultStoreId ?? STORE_CONFIG[0].id,
           type: 'RTO',
           requestedDays: '',
-          partialTime: '',
+          partialStart: '',
+          partialEnd: '',
           employeeEmail: '',
           note: '',
         })
@@ -70,8 +83,6 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
       setSubmitting(false)
     }
   }
-
-  const showPartialTime = form.type !== 'COMP' && form.type !== 'Sick'
 
   if (success) {
     return (
@@ -128,24 +139,25 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
         </select>
       </div>
 
-      {/* Request type */}
+      {/* Request type: RTO, PTO, or Partial Time Off */}
       <div>
         <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
           Request Type
         </label>
-        <div className="flex gap-2 flex-wrap">
-          {REQUEST_TYPES.map((t) => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {REQUEST_TYPES.map(({ value, label, description }) => (
             <button
-              key={t}
+              key={value}
               type="button"
-              onClick={() => setForm({ ...form, type: t })}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-colors ${
-                form.type === t
-                  ? 'bg-[var(--brand-navy)] text-white border-transparent'
-                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              onClick={() => setForm({ ...form, type: value })}
+              className={`text-left px-4 py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
+                form.type === value
+                  ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)]/5 text-[var(--brand-navy)]'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100'
               }`}
             >
-              {t}
+              <span className="block">{label}</span>
+              <span className="text-xs font-normal text-slate-500 mt-0.5 block">{description}</span>
             </button>
           ))}
         </div>
@@ -154,7 +166,10 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
       {/* Requested days */}
       <div>
         <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
-          Requested Days
+          <span className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5" />
+            Requested Days
+          </span>
         </label>
         <input
           type="text"
@@ -166,19 +181,37 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
         />
       </div>
 
-      {/* Partial time (optional, hidden for COMP and Sick) */}
-      {showPartialTime && (
-        <div>
-          <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
-            Partial Time <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
+      {/* Partial time: required when type is Partial */}
+      {isPartial && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            Time needed (required for Partial Time Off)
           </label>
-          <input
-            type="text"
-            value={form.partialTime}
-            onChange={(e) => setForm({ ...form, partialTime: e.target.value })}
-            placeholder="e.g. 10AM–2PM"
-            className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <span className="text-xs text-slate-500 block mb-1">Start</span>
+              <input
+                type="text"
+                required={isPartial}
+                value={form.partialStart}
+                onChange={(e) => setForm({ ...form, partialStart: e.target.value })}
+                placeholder="e.g. 10:00 AM"
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
+              />
+            </div>
+            <div>
+              <span className="text-xs text-slate-500 block mb-1">End</span>
+              <input
+                type="text"
+                required={isPartial}
+                value={form.partialEnd}
+                onChange={(e) => setForm({ ...form, partialEnd: e.target.value })}
+                placeholder="e.g. 2:00 PM"
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full bg-white"
+              />
+            </div>
+          </div>
         </div>
       )}
 

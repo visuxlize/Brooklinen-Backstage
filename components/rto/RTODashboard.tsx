@@ -85,11 +85,15 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
     const map: Record<string, string> = {
       RTO: 'bg-slate-100 text-slate-700',
       PTO: 'bg-blue-50 text-blue-800',
+      Partial: 'bg-violet-50 text-violet-800',
       COMP: 'bg-violet-50 text-violet-800',
       Sick: 'bg-amber-50 text-amber-800',
     }
     return map[type] ?? 'bg-slate-100 text-slate-700'
   }
+
+  const typeLabel = (type: string) =>
+    type === 'Partial' ? 'Partial Time Off' : type
 
   function RequestCard({ req, showActions }: { req: RtoRequest; showActions: boolean }) {
     const action = activeAction[req.id]
@@ -103,13 +107,15 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-900 text-sm">{req.employeeName}</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typeVariant(req.type)}`}>
-                {req.type}
+                {typeLabel(req.type)}
               </span>
               {!showActions && <RTOStatusBadge status={req.status as 'approved' | 'denied' | 'pending'} />}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">{req.requestedDays}</div>
             {req.partialTime && (
-              <div className="text-xs text-slate-400">{req.partialTime}</div>
+              <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                <span className="text-slate-400">Time:</span> {req.partialTime}
+              </div>
             )}
             {req.note && (
               <div className="text-xs text-slate-500 mt-1 italic">&ldquo;{req.note}&rdquo;</div>

@@ -52,10 +52,21 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is not set')
 }
 
+// Supabase: use Transaction mode pooler (port 6543) to avoid "MaxClientsInSessionMode" errors.
+// In Dashboard: Project Settings → Database → Connection string → "Transaction" (not Session).
+// Session mode (port 5432) has a low connection limit; transaction mode multiplexes connections.
+const dbUrl = process.env.DATABASE_URL
+
 // Create PostgreSQL connection
-// `prepare: false` is required for serverless environments
-const client = postgres(process.env.DATABASE_URL, { prepare: false })
+// prepare: false for serverless; max: 1 to avoid exhausting pool when using session mode
+const client = postgres(dbUrl, {
+  prepare: false,
+  max: 1,
+  idle_timeout: 20,
+  connect_timeout: 10,
+})
 
 // Create Drizzle instance with schema
+// If you see "MaxClientsInSessionMode: max clients reached", switch DATABASE_URL to pooler:6543
 // The schema is imported so Drizzle knows about your tables and relationships
 export const db = drizzle(client, { schema })

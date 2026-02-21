@@ -4,7 +4,7 @@ import { getStore, STORE_CONFIG } from '@/lib/stores'
 import { TrafficPanel } from '@/components/traffic/TrafficPanel'
 
 interface TrafficPageProps {
-  searchParams: { store?: string }
+  searchParams: Promise<{ store?: string }>
 }
 
 export default async function TrafficPage({ searchParams }: TrafficPageProps) {
@@ -12,9 +12,10 @@ export default async function TrafficPage({ searchParams }: TrafficPageProps) {
   if (!user) redirect('/login')
   if (user.role === 'associate') redirect('/schedule')
 
+  const params = await searchParams
   let storeId: number
   if (user.role === 'ops') {
-    storeId = searchParams.store ? parseInt(searchParams.store) : STORE_CONFIG[0].id
+    storeId = params.store ? parseInt(params.store) : STORE_CONFIG[0].id
   } else {
     storeId = user.storeId!
   }

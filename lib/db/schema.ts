@@ -83,13 +83,19 @@ export const rtoRequests = pgTable('rto_requests', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
-export const retailData = pgTable('retail_data', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  storeId: integer('store_id').notNull().references(() => stores.id),
-  date: date('date').notNull(),
-  budgetNet: numeric('budget_net', { precision: 12, scale: 2 }),
-  lyNet: numeric('ly_net', { precision: 12, scale: 2 }),
-})
+export const retailData = pgTable(
+  'retail_data',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    storeId: integer('store_id').notNull().references(() => stores.id),
+    date: date('date').notNull(),
+    budgetNet: numeric('budget_net', { precision: 12, scale: 2 }),
+    lyNet: numeric('ly_net', { precision: 12, scale: 2 }),
+  },
+  (t) => ({
+    retailStoreDateUnique: unique('retail_data_store_date').on(t.storeId, t.date),
+  })
+)
 
 // Type exports
 export type Store = typeof stores.$inferSelect

@@ -80,9 +80,9 @@ export function ShiftCell({ value, onChange, readOnly, storeColor }: ShiftCellPr
   const isRegularShift = !isEmpty && !shiftType
 
   function getCellClasses() {
-    if (isEmpty) return 'bg-slate-50 text-slate-300'
-    if (shiftType) return cn(shiftType.bg, shiftType.text, 'border', shiftType.border)
-    return 'bg-blue-50 text-blue-800 border border-blue-200'
+    if (isEmpty) return 'bg-slate-50 dark:bg-slate-700/60 text-slate-300 dark:text-slate-400'
+    if (shiftType) return cn(shiftType.bg, shiftType.text, 'border', shiftType.border, 'dark:border-slate-600')
+    return 'bg-blue-50 dark:bg-slate-700/80 text-blue-800 dark:text-slate-200 border border-blue-200 dark:border-slate-600'
   }
 
   if (editing && !readOnly) {
@@ -95,7 +95,7 @@ export function ShiftCell({ value, onChange, readOnly, storeColor }: ShiftCellPr
           onKeyDown={handleKeyDown}
           onBlur={commit}
           placeholder="10AM–6PM"
-          className="w-full h-full min-h-[40px] px-2 py-1 text-xs text-center rounded-lg focus:outline-none border-2 bg-white"
+          className="w-full h-full min-h-[40px] px-2 py-1 text-xs text-center rounded-lg focus:outline-none border-2 bg-white dark:bg-slate-700 dark:text-slate-100 dark:border-slate-500 dark:placeholder-slate-400"
           style={{ borderColor: storeColor }}
         />
       </div>
@@ -123,8 +123,8 @@ export function ShiftCell({ value, onChange, readOnly, storeColor }: ShiftCellPr
             className="fixed inset-0 z-40"
             onClick={() => setShowPopover(false)}
           />
-          <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-xl border border-slate-100 p-3 w-44">
-            <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2 px-1">
+          <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-600 p-3 w-44">
+            <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-400 mb-2 px-1">
               Quick Set
             </div>
             <div className="flex flex-col gap-1">
@@ -154,7 +154,7 @@ export function ShiftCell({ value, onChange, readOnly, storeColor }: ShiftCellPr
               })}
               <button
                 onClick={handleClear}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors mt-1"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors mt-1"
               >
                 <X className="w-3 h-3" />
                 Clear

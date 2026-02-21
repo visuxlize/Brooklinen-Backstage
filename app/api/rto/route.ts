@@ -10,9 +10,12 @@ const postSchema = z.object({
   employeeName: z.string().min(1),
   employeeEmail: z.string().email(),
   requestedDays: z.string().min(1),
-  type: z.enum(['RTO', 'PTO', 'COMP', 'Sick']),
+  type: z.enum(['RTO', 'PTO', 'Partial']),
   partialTime: z.string().optional(),
   note: z.string().optional(),
+}).refine((data) => data.type !== 'Partial' || (data.partialTime && data.partialTime.trim().length > 0), {
+  message: 'Partial Time Off requires start and end times',
+  path: ['partialTime'],
 })
 
 export async function GET(request: Request) {

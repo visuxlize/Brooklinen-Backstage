@@ -9,18 +9,40 @@
   --card: #FFFFFF;
   --border: #E2E8F0;
   --accent: #1B4B8A;
+  --text: #0F172A;
+  --text-muted: #64748B;
+  --sidebar-bg: #0F1F3D;
+  --sidebar-text: #F8FAFC;
+  --header-bg: #FFFFFF;
+  --header-border: #E2E8F0;
+}
+
+/* Dark mode: apply when <html> has class "dark" */
+html.dark,
+.dark {
+  --surface: #0F172A;
+  --card: #1E293B;
+  --border: #334155;
+  --text: #F1F5F9;
+  --text-muted: #94A3B8;
+  --sidebar-bg: #020617;
+  --sidebar-text: #F8FAFC;
+  --header-bg: #0F172A;
+  --header-border: #334155;
+  --brand-navy: #1E3A5F;
 }
 
 body {
   background: var(--surface);
-  color: var(--brand-slate);
+  color: var(--text);
+  font-feature-settings: "kern" 1, "liga" 1;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Scrollbar styling */
+/* Scrollbar - light */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -34,4 +56,11 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
 }

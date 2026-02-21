@@ -1,5 +1,5 @@
 import { db } from './db'
-import { stores, users, schedules, trafficWeekly } from './db/schema'
+import { stores, users, schedules, trafficWeekly, retailData } from './db/schema'
 import { STORE_CONFIG } from './stores'
 import { format, addWeeks, startOfWeek, addDays } from 'date-fns'
 import { sql } from 'drizzle-orm'
@@ -96,18 +96,7 @@ async function main() {
   // 2. Seed users (these are DB-only records; Supabase auth users must be created separately)
   console.log('Seeding users...')
   const SEED_USERS = [
-    { id: '00000000-0000-0000-0000-000000000001', name: 'Andres Marte', email: 'andres@brooklinen.com', role: 'ops', storeId: null },
-    { id: '00000000-0000-0000-0000-000000000002', name: 'Victoria Z.', email: 'victoria@brooklinen.com', role: 'leader', storeId: 101 },
-    { id: '00000000-0000-0000-0000-000000000003', name: 'Andy K.', email: 'andy@brooklinen.com', role: 'leader', storeId: 104 },
-    { id: '00000000-0000-0000-0000-000000000004', name: 'Demi C.', email: 'demi@brooklinen.com', role: 'leader', storeId: 107 },
-    { id: '00000000-0000-0000-0000-000000000005', name: "La'Shawn T.", email: 'laShawn@brooklinen.com', role: 'leader', storeId: 109 },
-    { id: '00000000-0000-0000-0000-000000000006', name: 'Braiden W.', email: 'braiden@brooklinen.com', role: 'associate', storeId: 101 },
-    { id: '00000000-0000-0000-0000-000000000007', name: 'Rachel S.', email: 'rachel@brooklinen.com', role: 'associate', storeId: 101 },
-    { id: '00000000-0000-0000-0000-000000000008', name: 'Willow V.', email: 'willow@brooklinen.com', role: 'associate', storeId: 101 },
-    { id: '00000000-0000-0000-0000-000000000009', name: 'Selene J.', email: 'selene@brooklinen.com', role: 'associate', storeId: 101 },
-    { id: '00000000-0000-0000-0000-000000000010', name: 'Patrick S.', email: 'patrick@brooklinen.com', role: 'associate', storeId: 101 },
-    { id: '00000000-0000-0000-0000-000000000011', name: 'Shir M.', email: 'shir@brooklinen.com', role: 'associate', storeId: 104 },
-    { id: '00000000-0000-0000-0000-000000000012', name: 'Brandon F.', email: 'brandon@brooklinen.com', role: 'associate', storeId: 104 },
+    { id: 'fa88ae0c-2d86-403b-8c29-a2e8507558c9', name: 'Andres', email: 'andres.marte@brooklinen.com', role: 'ops', storeId: null },
   ]
 
   for (const u of SEED_USERS) {
@@ -216,6 +205,37 @@ async function main() {
     }
   }
   console.log('Traffic seeded.')
+
+  // 5. Retail data (weekly budget sales & LY) for schedule header
+  console.log('Seeding retail data (budget / LY)...')
+  for (let w = 0; w < 5; w++) {
+    const weekStart = getWeekStart(w)
+    for (const store of STORE_CONFIG) {
+      for (let d = 0; d < 7; d++) {
+        const date = addDays(weekStart, d)
+        const dateStr = format(date, 'yyyy-MM-dd')
+        const budget = 5000 + Math.floor(Math.random() * 3500) + (d >= 5 ? 500 : 0)
+        const ly = Math.floor(budget * (0.7 + Math.random() * 0.25))
+        await db
+          .insert(retailData)
+          .values({
+            storeId: store.id,
+            date: dateStr,
+            budgetNet: String(budget),
+            lyNet: String(ly),
+          })
+          .onConflictDoUpdate({
+            target: [retailData.storeId, retailData.date],
+            set: {
+              budgetNet: sql`excluded.budget_net`,
+              lyNet: sql`excluded.ly_net`,
+            },
+          })
+      }
+    }
+  }
+  console.log('Retail data seeded.')
+
   console.log('Database seeding complete!')
   process.exit(0)
 }

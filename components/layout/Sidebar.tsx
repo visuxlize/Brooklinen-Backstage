@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
-import { LogOut, Search, Store } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { LogOut, Search, Users, Sun, Moon } from 'lucide-react'
 import { STORE_CONFIG } from '@/lib/stores'
 import { Avatar } from '@/components/ui/Avatar'
 import { useStore } from '@/lib/store-context'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { useTheme } from '@/components/theme/ThemeProvider'
 
 interface SidebarProps {
   currentUser: {
@@ -23,8 +24,8 @@ interface SidebarProps {
 
 export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProps) {
   const { activeStoreId, setActiveStoreId } = useStore()
+  const { theme, toggleTheme } = useTheme()
   const [search, setSearch] = useState('')
-  const router = useRouter()
   const pathname = usePathname()
 
   const isOps = currentUser.role === 'ops'
@@ -51,15 +52,15 @@ export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProp
       className={`fixed inset-y-0 left-0 z-30 flex flex-col transition-all duration-300 ${
         isOpen ? 'w-64' : 'w-0 overflow-hidden'
       }`}
-      style={{ backgroundColor: 'var(--brand-navy)' }}
+      style={{ backgroundColor: 'var(--sidebar-bg)' }}
     >
       <div className="flex flex-col h-full w-64">
         {/* Header */}
         <div className="p-5 border-b border-white/10">
-          <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-0.5">
+          <div className="text-xs font-semibold uppercase tracking-widest text-white/50 mb-0.5">
             Brooklinen
           </div>
-          <div className="text-xl font-extrabold text-white tracking-tight">Retail Ops</div>
+          <div className="text-xl font-extrabold text-white tracking-tight">Scheduling</div>
         </div>
 
         {/* User info */}
@@ -122,6 +123,35 @@ export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProp
             )
           })}
         </nav>
+
+        {/* User Management (ops + leader only) */}
+        {(currentUser.role === 'ops' || currentUser.role === 'leader') && (
+          <div className="px-4 py-2 border-t border-white/10">
+            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 block px-4 py-2">Management</span>
+            <Link
+              href="/admin"
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                pathname === '/admin' ? 'bg-white/10' : 'hover:bg-white/5'
+              }`}
+            >
+              <Users className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <span className="text-sm font-medium text-white">User Management</span>
+            </Link>
+          </div>
+        )}
+
+        {/* Theme toggle */}
+        <div className="px-4 py-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/20 text-white/80 hover:bg-white/10 transition-colors text-sm font-medium"
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </button>
+        </div>
 
         {/* Sign out */}
         <div className="p-4 border-t border-white/10">

@@ -4,17 +4,18 @@ import { getStore, STORE_CONFIG } from '@/lib/stores'
 import { RTODashboard } from '@/components/rto/RTODashboard'
 
 interface RtoPageProps {
-  searchParams: { store?: string }
+  searchParams: Promise<{ store?: string }>
 }
 
 export default async function RtoPage({ searchParams }: RtoPageProps) {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
-  if (user.role === 'associate') redirect('/rto/submit')
+  if (user.role === 'associate') redirect(`/rto/submit?store=${user.storeId ?? ''}`)
 
+  const params = await searchParams
   let storeId: number
   if (user.role === 'ops') {
-    storeId = searchParams.store ? parseInt(searchParams.store) : STORE_CONFIG[0].id
+    storeId = params.store ? parseInt(params.store) : STORE_CONFIG[0].id
   } else {
     storeId = user.storeId!
   }

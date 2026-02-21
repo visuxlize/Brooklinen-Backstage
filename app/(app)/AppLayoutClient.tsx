@@ -40,9 +40,10 @@ export function AppLayoutClient({
           currentUser={currentUser}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
           pendingRtoCount={pendingRtoCount}
+          sidebarOpen={sidebarOpen}
         />
         <main
-          className="transition-all duration-300 pt-14 min-h-screen bg-[var(--surface)]"
+          className="transition-all duration-300 pt-12 min-h-screen bg-[var(--surface)] text-[var(--text)]"
           style={{ marginLeft: sidebarOpen ? '256px' : '0' }}
         >
           {children}
