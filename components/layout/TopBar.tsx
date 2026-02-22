@@ -1,14 +1,17 @@
 'use client'
 
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Menu } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Menu, ChevronDown, User, LogOut } from 'lucide-react'
 import { STORE_CONFIG } from '@/lib/stores'
 import { Avatar } from '@/components/ui/Avatar'
 import { Chip } from '@/components/ui/Chip'
 import { BrooklinenLogo } from '@/components/ui/BrooklinenLogo'
 import { useStore } from '@/lib/store-context'
 import { RTO_SUBMIT_URL } from '@/lib/app-config'
+import { useUserPreferencesStore, getInitials } from '@/lib/user-preferences-store'
+import { createClient } from '@/lib/supabase/client'
 
 interface TopBarProps {
   currentUser: {
@@ -45,6 +48,29 @@ function buildTabs(role: string, storeId: number | null, pendingRtoCount: number
 export function TopBar({ currentUser, onToggleSidebar, pendingRtoCount = 0, sidebarOpen = true }: TopBarProps) {
   const { activeStoreId } = useStore()
   const pathname = usePathname()
+  const router = useRouter()
+  const [avatarOpen, setAvatarOpen] = useState(false)
+  const avatarRef = useRef<HTMLDivElement>(null)
+  const { displayName, avatarUrl } = useUserPreferencesStore()
+  const effectiveName = displayName?.trim() || currentUser.name
+  const firstName = effectiveName.split(' ')[0]
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) setAvatarOpen(false)
+    }
+    if (avatarOpen) {
+      document.addEventListener('click', onClickOutside)
+      return () => document.removeEventListener('click', onClickOutside)
+    }
+  }, [avatarOpen])
+
+  async function handleLogOut() {
+    setAvatarOpen(false)
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   const activeStore = STORE_CONFIG.find((s) => s.id === activeStoreId)
   const tabs = buildTabs(currentUser.role, activeStoreId, pendingRtoCount)
@@ -53,8 +79,6 @@ export function TopBar({ currentUser, onToggleSidebar, pendingRtoCount = 0, side
     const path = href.split('?')[0]
     return pathname === path || pathname.startsWith(path + '/')
   }
-
-  const firstName = currentUser.name.split(' ')[0]
 
   return (
     <header
@@ -121,13 +145,48 @@ export function TopBar({ currentUser, onToggleSidebar, pendingRtoCount = 0, side
         {currentUser.role === 'associate' && (
           <Chip label="View Only" variant="amber" />
         )}
-        <div className="flex items-center gap-2">
-          <Avatar
-            name={currentUser.name}
-            size="sm"
-            color={activeStore?.color ?? '#1B4B8A'}
-          />
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden sm:inline">{firstName}</span>
+        <div className="relative" ref={avatarRef}>
+          <button
+            type="button"
+            onClick={() => setAvatarOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 p-1.5 transition-colors"
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={effectiveName}
+                className="w-8 h-8 rounded-full object-cover"
+              />
+            ) : (
+              <Avatar
+                name={effectiveName}
+                size="sm"
+                color={activeStore?.color ?? '#1B4B8A'}
+              />
+            )}
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden sm:inline">{firstName}</span>
+            <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${avatarOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {avatarOpen && (
+            <div className="absolute right-0 top-full mt-1 py-1 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-600 z-50">
+              <Link
+                href="/settings"
+                onClick={() => setAvatarOpen(false)}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+              >
+                <User className="w-4 h-4" />
+                My Settings
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogOut}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+              >
+                <LogOut className="w-4 h-4" />
+                Log out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

@@ -308,14 +308,37 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
 
   const [hourlyData, setHourlyData] = useState<Array<{ hour: number; dayOfWeek: number; avgCount: string | null; dailyTotal: string | null; pctOfDay: string | null }>>([])
 
-  const STORAGE_KEY = `traffic-upload-${store.id}`
+  const STORAGE_KEY = `trafficData_${store.id}`
+
+  const [lastUpload, setLastUpload] = useState<{ uploadedAt: string; fileName: string } | null>(null)
 
   useEffect(() => {
     try {
-      const raw = typeof window !== 'undefined' ? sessionStorage.getItem(STORAGE_KEY) : null
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
       if (raw) {
         const parsed = JSON.parse(raw) as unknown
-        if (
+        if (parsed && typeof parsed === 'object' && 'data' in parsed) {
+          const { data, uploadedAt, fileName } = parsed as {
+            data: TrafficUploadResult
+            uploadedAt: string
+            fileName: string
+          }
+          if (
+            data &&
+            typeof data === 'object' &&
+            'trendMultiplier' in data &&
+            'peakHours' in data &&
+            Array.isArray(data.peakHours) &&
+            'historyTable' in data &&
+            Array.isArray(data.historyTable)
+          ) {
+            setUploadResult(data)
+            setLastUpload({ uploadedAt: uploadedAt ?? '', fileName: fileName ?? '' })
+          } else {
+            setUploadResult(null)
+            setLastUpload(null)
+          }
+        } else if (
           parsed &&
           typeof parsed === 'object' &&
           'trendMultiplier' in parsed &&
@@ -325,14 +348,18 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
           Array.isArray((parsed as TrafficUploadResult).historyTable)
         ) {
           setUploadResult(parsed as TrafficUploadResult)
+          setLastUpload(null)
         } else {
           setUploadResult(null)
+          setLastUpload(null)
         }
       } else {
         setUploadResult(null)
+        setLastUpload(null)
       }
     } catch {
       setUploadResult(null)
+      setLastUpload(null)
     }
     async function fetchData() {
       setLoading(true)
@@ -462,6 +489,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
     setExcelError(null)
     setExcelWeeks([])
     setUploadResult(null)
+    setLastUpload(null)
     if (!file) return
     const name = (file.name || '').toLowerCase()
     if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
@@ -481,11 +509,17 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         }
         const result = buildUploadResult(parsed)
         setUploadResult(result)
+        const payload = {
+          uploadedAt: new Date().toISOString(),
+          fileName: file.name,
+          data: result,
+        }
         try {
-          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(result))
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
         } catch {
           // ignore storage errors
         }
+        setLastUpload({ uploadedAt: payload.uploadedAt, fileName: file.name })
 
         const weeks = result.historyTable.map((row) => {
           const [sun, mon, tue, wed, thu, fri, sat] = row.days
@@ -707,6 +741,16 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
               <FileSpreadsheet className="w-4 h-4" />
               Choose file…
             </button>
+            {lastUpload && (
+              <p className="mt-2 text-[0.78rem] text-slate-500 dark:text-slate-400">
+                Last upload: <strong>{lastUpload.fileName}</strong> —{' '}
+                {new Date(lastUpload.uploadedAt).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </p>
+            )}
             {excelError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{excelError}</p>}
             {excelWeeks.length > 0 && (
               <>

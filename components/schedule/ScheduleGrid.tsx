@@ -226,6 +226,34 @@ export function ScheduleGrid({
     fetchData()
   }, [store.id, weekStartStr, refetchTrigger])
 
+  // Refetch approved RTO when tab becomes visible so Undo/Deny on RTO tab updates schedule cells
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== 'visible') return
+      fetch(`/api/rto?storeId=${store.id}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json: { data?: Array<{ id: string; employeeName: string; type: string; status: string; startDate?: string | null; endDate?: string | null; requestedDays?: string }> } | null) => {
+          if (!json?.data) return
+          const list = (Array.isArray(json.data) ? json.data : [])
+            .filter((r) => r.status?.toLowerCase() === 'approved')
+            .map((r) => ({
+              id: r.id,
+              employeeName: r.employeeName,
+              type: r.type,
+              status: r.status,
+              startDate: r.startDate != null ? String(r.startDate).slice(0, 10) : null,
+              endDate: r.endDate != null ? String(r.endDate).slice(0, 10) : null,
+              requestedDays: r.requestedDays,
+            }))
+            .map(ensureRtoRequestDates)
+            .filter((x): x is NonNullable<ReturnType<typeof ensureRtoRequestDates>> => x != null)
+          setApprovedRtoRequests(list)
+        })
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [store.id])
+
   const handleCellChange = useCallback(
     async (employeeName: string, dayOfWeek: number, value: string) => {
       const avail = weekAvailability?.[employeeName]?.[dayOfWeek]
@@ -398,42 +426,77 @@ export function ScheduleGrid({
     if (!original) return
     setEmailState('loading')
     try {
-      const fullWidth = original.scrollWidth
+      const origRect = original.getBoundingClientRect()
+      const fullWidth = Math.max(original.scrollWidth, origRect.width, 1400)
       const fullHeight = original.scrollHeight
+
+      const wrapper = document.createElement('div')
+      wrapper.style.cssText = `
+        position: fixed;
+        top: -${fullHeight + 200}px;
+        left: 0;
+        width: ${fullWidth}px;
+        min-width: ${fullWidth}px;
+        max-width: ${fullWidth}px;
+        height: auto;
+        overflow: visible;
+        z-index: -999;
+        background: #ffffff;
+        font-family: inherit;
+      `
+
       const clone = original.cloneNode(true) as HTMLElement
       clone.style.cssText = `
-        position: fixed;
-        top: -99999px;
-        left: 0;
-        background: #ffffff;
+        width: ${fullWidth}px;
+        min-width: ${fullWidth}px;
         overflow: visible;
-        z-index: -1;
+        position: static;
       `
-      clone.style.width = `${fullWidth}px`
-      clone.style.minWidth = `${fullWidth}px`
-      clone.style.height = `${fullHeight}px`
-      document.body.appendChild(clone)
+      wrapper.appendChild(clone)
+      document.body.appendChild(wrapper)
 
       clone.querySelectorAll('*').forEach((el) => {
         const htmlEl = el as HTMLElement
-        const s = window.getComputedStyle(htmlEl)
-        if (s.overflow === 'auto' || s.overflow === 'scroll' || s.overflowX === 'auto' || s.overflowX === 'scroll' || s.overflowY === 'auto' || s.overflowY === 'scroll') {
+        const cs = window.getComputedStyle(htmlEl)
+        if (cs.overflow === 'hidden' || cs.overflow === 'auto' || cs.overflow === 'scroll') {
           htmlEl.style.overflow = 'visible'
+        }
+        if (cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll') {
           htmlEl.style.overflowX = 'visible'
+        }
+        if (cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll') {
           htmlEl.style.overflowY = 'visible'
         }
       })
 
-      const tables = clone.querySelectorAll('table')
-      tables.forEach((t) => {
-        const tab = t as HTMLElement
-        tab.style.width = '100%'
+      const table = clone.querySelector('table[data-schedule-table], table, [role="grid"]')
+      if (table) {
+        const tab = table as HTMLElement
+        tab.style.width = `${fullWidth}px`
         tab.style.minWidth = `${fullWidth}px`
-        tab.style.tableLayout = 'auto'
-      })
+        tab.style.tableLayout = 'fixed'
+        const headerCells = tab.querySelectorAll('thead tr:first-child th, [data-row="header"] th')
+        const colCount = headerCells.length || 9
+        const colWidths = [
+          Math.round(fullWidth * 0.13),
+          Math.round(fullWidth * 0.07),
+          ...Array(7).fill(Math.round(fullWidth * 0.114)),
+        ]
+        const allRows = tab.querySelectorAll('tr')
+        allRows.forEach((row) => {
+          const cells = row.querySelectorAll('td, th')
+          cells.forEach((cell, i) => {
+            const w = colWidths[i] ?? colWidths[colWidths.length - 1]
+            ;(cell as HTMLElement).style.width = `${w}px`
+            ;(cell as HTMLElement).style.minWidth = `${w}px`
+            ;(cell as HTMLElement).style.maxWidth = `${w}px`
+          })
+        })
+      }
 
-      const saveBtn = clone.querySelector('[data-save-btn]')
-      if (saveBtn) (saveBtn as HTMLElement).style.display = 'none'
+      clone.querySelectorAll('[data-save-btn], .save-btn, [data-hide-in-export]').forEach((el) => {
+        (el as HTMLElement).style.display = 'none'
+      })
 
       const coverageRow = clone.querySelector('tr[data-row="coverage"]')
       if (coverageRow) {
@@ -441,81 +504,85 @@ export function ScheduleGrid({
         if (select) {
           const opt = select.options[select.selectedIndex]
           const span = document.createElement('span')
-          span.className = 'text-xs text-slate-600 dark:text-slate-400'
+          span.className = 'text-xs text-slate-600'
           span.textContent = opt?.text ?? '—'
           select.parentNode?.replaceChild(span, select)
         }
         const input = coverageRow.querySelector('input[type="text"]')
         if (input) {
           const span = document.createElement('span')
-          span.className = 'text-xs text-slate-700 dark:text-slate-200'
+          span.className = 'text-xs text-slate-700'
           span.textContent = (input as HTMLInputElement).value?.trim() || '—'
           input.parentNode?.replaceChild(span, input)
         }
       }
 
-      clone.querySelectorAll('[role="listbox"], [role="tooltip"], .dropdown-panel').forEach((el) => {
-        (el as HTMLElement).style.display = 'none'
+      clone.querySelectorAll('.shift-pill, td[data-cell-type="shift"]').forEach((pill) => {
+        const el = pill as HTMLElement
+        const text = (el.textContent ?? '').trim()
+        const isOFF = /^OFF$/i.test(text)
+        const isPTO = /^PTO$/i.test(text)
+        const isSick = /^Sick$/i.test(text)
+        el.style.cssText += `
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border-radius: 8px !important;
+          padding: 6px 8px !important;
+          font-size: 0.75rem !important;
+          font-weight: ${isOFF || isPTO ? '700' : '500'} !important;
+          background: ${isOFF ? '#fff0ef' : isPTO ? '#fff8e1' : isSick ? '#f0fdf4' : '#eef1f8'} !important;
+          border: 1px solid ${isOFF ? '#ffd5d3' : isPTO ? '#ffe082' : isSick ? '#bbf7d0' : '#dde3f0'} !important;
+          color: ${isOFF ? '#e53935' : isPTO ? '#f59e0b' : isSick ? '#16a34a' : '#1a2332'} !important;
+          width: 100% !important;
+          box-sizing: border-box !important;
+          white-space: nowrap !important;
+        `
       })
 
-      const shiftCells = clone.querySelectorAll('td[data-cell-type="shift"]')
-      shiftCells.forEach((td) => {
-        const cell = td as HTMLElement
-        const value = (cell.getAttribute('data-value') ?? '').trim()
-        const isOff = value === 'OFF' || value === 'HOL'
-        const isPto = value === 'PTO'
-        cell.style.background = isPto ? '#fff8e1' : isOff ? '#fff0ef' : '#eef1f8'
-        cell.style.border = `1px solid ${isPto ? '#ffe082' : isOff ? '#ffd5d3' : '#dde3f0'}`
-        cell.style.borderRadius = '8px'
-        cell.style.padding = '6px 10px'
-        cell.style.textAlign = 'center'
-        cell.style.fontSize = '0.8rem'
-        cell.style.fontWeight = isOff || isPto ? '700' : '500'
-        cell.style.color = isPto ? '#f59e0b' : isOff ? '#e53935' : '#1a2332'
-        cell.style.display = 'flex'
-        cell.style.alignItems = 'center'
-        cell.style.justifyContent = 'center'
-        cell.style.width = '100%'
-        cell.style.boxSizing = 'border-box'
-        const inner = cell.querySelector('div, span')
-        if (inner) (inner as HTMLElement).style.color = isPto ? '#f59e0b' : isOff ? '#e53935' : '#1a2332'
-      })
-
-      const powerHourRow = clone.querySelector('[data-row="power-hour"]')
+      const powerHourRow = clone.querySelector('[data-row="power-hour"], .power-hour-row')
       if (powerHourRow) (powerHourRow as HTMLElement).style.background = '#fffbf5'
 
-      const actualHoursRow = clone.querySelector('[data-row="actual-hours"]')
+      const actualHoursRow = clone.querySelector('[data-row="actual-hours"], .actual-hours-row')
       if (actualHoursRow) {
         (actualHoursRow as HTMLElement).style.background = '#0e1f3d'
-        actualHoursRow.querySelectorAll('td, [role="cell"]').forEach((c) => {
-          (c as HTMLElement).style.color = '#ffffff'
-        })
+        actualHoursRow.querySelectorAll('*').forEach((c) => ((c as HTMLElement).style.color = '#ffffff'))
       }
 
-      await new Promise((r) => setTimeout(r, 200))
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      await new Promise((r) => setTimeout(r, 250))
 
-      const canvas = await html2canvas(clone, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: fullWidth,
-        windowHeight: fullHeight,
-        logging: false,
-        imageTimeout: 0,
-        removeContainer: true,
-      } as Parameters<typeof html2canvas>[1])
-      if (document.body.contains(clone)) document.body.removeChild(clone)
+      const cloneHeight = wrapper.scrollHeight
+
+      let canvas: HTMLCanvasElement
+      try {
+        canvas = await html2canvas(wrapper, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          scrollX: 0,
+          scrollY: 0,
+          x: 0,
+          y: 0,
+          width: fullWidth,
+          height: cloneHeight,
+          windowWidth: fullWidth,
+          windowHeight: cloneHeight,
+          logging: false,
+          imageTimeout: 0,
+          removeContainer: false,
+        } as Parameters<typeof html2canvas>[1])
+      } finally {
+        if (document.body.contains(wrapper)) document.body.removeChild(wrapper)
+      }
 
       const weekEnd = addDays(weekStart, 6)
       const weekLabel = `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}, ${format(weekStart, 'yyyy')}`
       const safeStore = store.name.toLowerCase().replace(/\s+/g, '-')
       const safeWeek = weekLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
-      const filename = `schedule-${safeStore}-${safeWeek}.png`
       const link = document.createElement('a')
-      link.download = filename
+      link.download = `schedule-${safeStore}-${safeWeek}.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
       setEmailState('sent')
@@ -821,7 +888,7 @@ export function ScheduleGrid({
             ))}
           </div>
         ) : (
-            <table className="w-full min-w-[700px] border-collapse">
+            <table data-schedule-table className="w-full min-w-[700px] border-collapse">
             <thead>
               <tr data-row="header" className="bg-[var(--brand-navy)] text-white border-b-0" style={{ backgroundColor: '#0e1f3d' }}>
                 <th className="text-left px-4 py-3 w-52 rounded-tl-lg">
