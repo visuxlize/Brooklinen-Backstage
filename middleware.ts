@@ -3,17 +3,24 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 type CookieToSet = { name: string; value: string; options?: Record<string, unknown> }
 
-const PUBLIC_PATHS = ['/login', '/signup', '/rto/submit']
+// Internal app: only login and RTO submit are public. No self-service signup.
+const PUBLIC_PATHS = ['/login', '/rto/submit']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths (including the RTO submit page under the (app) group)
+  // Block signup — internal users are created by admins only
+  if (pathname.startsWith('/signup') || pathname.startsWith('/auth/signup')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
-  // Allow public RTO POST API
+  // Only public API: RTO form submission (store-facing)
   if (pathname === '/api/rto' && request.method === 'POST') {
     return NextResponse.next()
   }

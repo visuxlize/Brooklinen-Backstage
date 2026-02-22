@@ -1,7 +1,10 @@
-# SaaS Starter Kit - Cursor Rules
+# Brooklinen Backstage - Cursor Rules
 
 ## Architecture Overview
-This is a production-ready SaaS starter kit with Next.js, Supabase, and Drizzle ORM.
+Internal-only app (Brooklinen Backstage) with Next.js, Supabase, and Drizzle ORM.
+- **Private / internal use**: No public signup; users are created by admins. Keep surface area minimal.
+- **Security**: Stricter defaults—auth on all routes except login and designated public endpoints (e.g. RTO submit). Never expose service role; validate all inputs; use security headers.
+
 Always follow these patterns to maintain consistency across the codebase.
 
 ## Tech Stack
@@ -383,32 +386,23 @@ export function MyForm() {
 4. **Font Optimization** - Use `next/font` for web fonts
 5. **Database Indexes** - Add indexes to frequently queried columns
 
-## Security Checklist
+## Security Checklist (internal app — keep tight)
 
-- [ ] Never expose `SUPABASE_SERVICE_ROLE_KEY` to client
-- [ ] Validate all user inputs with Zod
+- [ ] Never expose `SUPABASE_SERVICE_ROLE_KEY` to client or logs
+- [ ] No public signup; new users only via Admin (API or panel)
+- [ ] Validate all user inputs with Zod; reject unknown fields where appropriate
 - [ ] Use Row Level Security (RLS) in Supabase
 - [ ] Sanitize user-generated content
-- [ ] Use HTTPS in production
-- [ ] Set proper CORS headers
-- [ ] Rate limit API endpoints
-- [ ] Never trust client-side data
+- [ ] Use HTTPS in production; security headers enabled (X-Frame-Options, X-Content-Type-Options, etc.)
+- [ ] Minimal public routes: only `/login` and explicitly allowed paths (e.g. RTO submit)
+- [ ] Never trust client-side data; re-verify auth and role in every API route
 
 ## Testing Strategy
 
 1. **Manual Testing** - Test user flows in browser
 2. **Database Testing** - Verify migrations and queries
 3. **API Testing** - Test endpoints with Postman/Thunder Client
-4. **Auth Testing** - Test login, signup, logout flows
-
-## Deployment Checklist
-
-- [ ] All environment variables set in Vercel
-- [ ] Database migrations applied
-- [ ] Supabase RLS policies configured
-- [ ] Custom domain configured (if needed)
-- [ ] Error tracking setup (Sentry, etc.)
-- [ ] Analytics setup (if needed)
+4. **Auth Testing** - Test login and logout (no public signup)
 
 ## When You Ask Claude for Help
 

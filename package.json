@@ -1,8 +1,8 @@
 {
-  "name": "saas-starter-kit",
+  "name": "brooklinen-backstage",
   "version": "1.0.0",
   "type": "module",
-  "description": "Production-ready SaaS starter with Next.js, Supabase, and Drizzle ORM",
+  "description": "Brooklinen Backstage — official internal management tool for scheduling, daily ops, and retail operations.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
