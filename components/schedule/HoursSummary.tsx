@@ -34,19 +34,22 @@ export function HoursSummary({
       {budgetHoursDaily != null && (
         <tr className="bg-slate-100 dark:bg-slate-700/60 border-b border-slate-200 dark:border-slate-600">
           <td className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">Budget hours</td>
+          <td className="px-2 py-2 text-center text-sm font-bold text-slate-800 dark:text-slate-100 w-14">
+            {budgetWtd > 0 ? `${budgetWtd}h` : '—'}
+          </td>
           {DAY_KEYS.map((day) => (
             <td key={day} className="px-2 py-2 text-center text-sm font-medium text-slate-800 dark:text-slate-100">
               {budgetHoursDaily[day] != null && budgetHoursDaily[day] > 0 ? `${budgetHoursDaily[day]}h` : '—'}
             </td>
           ))}
-          <td className="px-4 py-2 text-center text-sm font-bold text-slate-800 dark:text-slate-100">
-            {budgetWtd > 0 ? `${budgetWtd}h` : '—'}
-          </td>
         </tr>
       )}
       {trendingHoursDaily != null && (
         <tr className="bg-slate-50 dark:bg-slate-700/40 border-b border-slate-200 dark:border-slate-600">
           <td className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">Trending hours</td>
+          <td className="px-2 py-2 text-center text-sm font-bold text-slate-800 dark:text-slate-100 w-14">
+            {trendingWtd > 0 ? `${trendingWtd}h` : '—'}
+          </td>
           {DAY_KEYS.map((day) => (
             <td key={day} className="px-2 py-2 text-center text-sm font-medium text-slate-800 dark:text-slate-100">
               {trendingHoursDaily[day] != null && trendingHoursDaily[day] > 0 ? (
@@ -63,14 +66,18 @@ export function HoursSummary({
               )}
             </td>
           ))}
-          <td className="px-4 py-2 text-center text-sm font-bold text-slate-800 dark:text-slate-100">
-            {trendingWtd > 0 ? `${trendingWtd}h` : '—'}
-          </td>
         </tr>
       )}
       <tr className="bg-[var(--brand-navy)] text-white border-t-0">
         <td className="px-4 py-3 rounded-bl-lg">
           <span className="text-xs font-semibold uppercase tracking-widest text-white/80">Actual Hours</span>
+        </td>
+        <td
+          className={`px-2 py-3 text-center w-14 ${isOverBudget ? 'bg-red-600 dark:bg-red-700' : ''}`}
+        >
+          <span className="text-sm font-extrabold text-white">
+            {grandTotal > 0 ? `${grandTotal}h` : '0h'}
+          </span>
         </td>
         {DAY_KEYS.map((day) => (
           <td key={day} className="px-2 py-3 text-center">
@@ -79,13 +86,6 @@ export function HoursSummary({
             </span>
           </td>
         ))}
-        <td
-          className={`px-4 py-3 text-center rounded-br-lg ${isOverBudget ? 'bg-red-600 dark:bg-red-700' : ''}`}
-        >
-          <span className="text-sm font-extrabold text-white">
-            {grandTotal > 0 ? `${grandTotal}h` : '0h'}
-          </span>
-        </td>
       </tr>
     </>
   )

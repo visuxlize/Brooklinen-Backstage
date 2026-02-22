@@ -23,6 +23,7 @@ const putSchema = z.object({
   workload: dayKeysSchema.optional(),
   promotions: dayKeysSchema.optional(),
   hoursOverride: hoursOverrideSchema.nullable().optional(),
+  employeeOrder: z.array(z.string()).nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
     workload: row?.workload ?? null,
     promotions: row?.promotions ?? null,
     hoursOverride: row?.hoursOverride ?? null,
+    employeeOrder: row?.employeeOrder ?? null,
   })
 }
 
@@ -61,7 +63,7 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json()
-    const { storeId, weekStart, workload, promotions, hoursOverride } = putSchema.parse(body)
+    const { storeId, weekStart, workload, promotions, hoursOverride, employeeOrder } = putSchema.parse(body)
 
     if (isStoreLeader(user) && user.storeId !== storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -78,6 +80,7 @@ export async function PUT(request: Request) {
     const nextWorkload = workload !== undefined ? { ...baseWorkload, ...workload } : baseWorkload
     const nextPromotions = promotions !== undefined ? { ...basePromotions, ...promotions } : basePromotions
     const nextHoursOverride = hoursOverride !== undefined ? hoursOverride : (existing?.hoursOverride ?? null)
+    const nextEmployeeOrder = employeeOrder !== undefined ? employeeOrder : (existing?.employeeOrder as string[] | null) ?? null
 
     await db
       .insert(scheduleWeekMeta)
@@ -87,6 +90,7 @@ export async function PUT(request: Request) {
         workload: nextWorkload,
         promotions: nextPromotions,
         hoursOverride: nextHoursOverride as object | null,
+        employeeOrder: nextEmployeeOrder as object | null,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -95,6 +99,7 @@ export async function PUT(request: Request) {
           workload: nextWorkload,
           promotions: nextPromotions,
           hoursOverride: nextHoursOverride as object | null,
+          employeeOrder: nextEmployeeOrder as object | null,
           updatedAt: new Date(),
         },
       })

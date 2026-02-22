@@ -78,6 +78,13 @@
       "when": 1771782063713,
       "tag": "0010_pale_punisher",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1771784735586,
+      "tag": "0011_silly_spitfire",
+      "breakpoints": true
     }
   ]
 }

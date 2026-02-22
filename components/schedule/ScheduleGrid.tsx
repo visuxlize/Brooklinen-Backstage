@@ -4,14 +4,14 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format, addDays } from 'date-fns'
 import { getWeekStartByIndex, getTotalWeeks } from '@/lib/scheduleWeeks'
-import { Palmtree, RefreshCw, Thermometer, X, Trash2, Copy, GripVertical } from 'lucide-react'
+import { Palmtree, RefreshCw, Thermometer, X, Trash2, GripVertical } from 'lucide-react'
 import { ShiftCell } from './ShiftCell'
 import { WeekNav } from './WeekNav'
 import { HoursSummary } from './HoursSummary'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar } from '@/components/ui/Avatar'
 import { parsePaidHours, SHIFT_TYPES, shiftFitsInWindow, formatTime24to12 } from '@/lib/shiftUtils'
-import type { StoreConfig } from '@/lib/stores'
+import { STORE_CONFIG, type StoreConfig } from '@/lib/stores'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
@@ -88,14 +88,21 @@ export function ScheduleGrid({
   const [emailState, setEmailState] = useState<'idle' | 'loading' | 'sent'>('idle')
   const [employees, setEmployees] = useState<string[]>(initialEmployees)
 
-  // When store changes (e.g. sidebar selection), show that store's employees and data only
+  // When store changes, reset to initial then fetch will repopulate with order + coverage
   useEffect(() => {
-    setEmployees(initialEmployees)
-    setGridData(initialData)
+    if (store.id) {
+      setEmployees(initialEmployees)
+      setGridData(initialData)
+    }
   }, [store.id])
   const [toast, setToast] = useState<string | null>(null)
   const [copySource, setCopySource] = useState<{ employeeName: string; dayOfWeek: number } | null>(null)
-  const [copyMode, setCopyMode] = useState(false)
+  const [coverageAway, setCoverageAway] = useState<{ employeeName: string; dayOfWeek: number; atStoreName: string }[]>([])
+  const [coverageFromStoreByEmployee, setCoverageFromStoreByEmployee] = useState<Record<string, number>>({})
+  const [refetchTrigger, setRefetchTrigger] = useState(0)
+  const [addCoverageFromStoreId, setAddCoverageFromStoreId] = useState<number | null>(null)
+  const [addCoverageEmployeeName, setAddCoverageEmployeeName] = useState('')
+  const [addCoverageCells, setAddCoverageCells] = useState<Record<number, string>>({})
   const [deleteState, setDeleteState] = useState<'idle' | 'loading'>('idle')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [weeklyBudget, setWeeklyBudget] = useState<number | null>(initialWeeklyBudget ?? null)
@@ -138,11 +145,21 @@ export function ScheduleGrid({
           const json = await scheduleRes.json()
           const data = json.data ?? []
           const newGrid: GridData = {}
+          const coverageFrom: Record<string, number> = {}
           for (const row of data) {
             if (!newGrid[row.employeeName]) newGrid[row.employeeName] = {}
             newGrid[row.employeeName][row.dayOfWeek] = row.shiftValue ?? ''
+            if (row.coveringFromStoreId != null) coverageFrom[row.employeeName] = row.coveringFromStoreId
           }
           setGridData(newGrid)
+          setCoverageAway((json.coverageAway ?? []).map((r: { employeeName: string; dayOfWeek: number; atStoreName: string }) => ({ employeeName: r.employeeName, dayOfWeek: r.dayOfWeek, atStoreName: r.atStoreName })))
+          setCoverageFromStoreByEmployee(coverageFrom)
+          const order = (json.weekMeta?.employeeOrder as string[] | null) ?? null
+          const mainOrdered = order && order.length
+            ? [...order.filter((n: string) => initialEmployees.includes(n)), ...initialEmployees.filter((n) => !order.includes(n))]
+            : [...initialEmployees]
+          const coverageNames = [...new Set(data.filter((r: { coveringFromStoreId?: number | null }) => r.coveringFromStoreId).map((r: { employeeName: string }) => r.employeeName))].filter((n) => !mainOrdered.includes(n))
+          setEmployees([...mainOrdered, ...coverageNames])
           setWeeklyBudget(typeof json.weeklyBudget === 'number' ? json.weeklyBudget : null)
           setWeeklyLy(typeof json.weeklyLy === 'number' ? json.weeklyLy : null)
           if (Array.isArray(json.dailyBudget) && json.dailyBudget.length === 7)
@@ -173,7 +190,7 @@ export function ScheduleGrid({
       }
     }
     fetchData()
-  }, [store.id, weekStartStr])
+  }, [store.id, weekStartStr, refetchTrigger])
 
   const handleCellChange = useCallback(
     async (employeeName: string, dayOfWeek: number, value: string) => {
@@ -194,6 +211,7 @@ export function ScheduleGrid({
         [employeeName]: { ...(prev[employeeName] ?? {}), [dayOfWeek]: value },
       }))
 
+      const coveringFrom = coverageFromStoreByEmployee[employeeName]
       try {
         const res = await fetch('/api/schedule', {
           method: 'POST',
@@ -204,6 +222,7 @@ export function ScheduleGrid({
             weekStart: weekStartStr,
             dayOfWeek,
             shiftValue: value,
+            ...(coveringFrom != null && { coveringFromStoreId: coveringFrom }),
           }),
         })
         if (!res.ok) throw new Error('Failed to save')
@@ -217,7 +236,7 @@ export function ScheduleGrid({
         setTimeout(() => setToast(null), 3000)
       }
     },
-    [store.id, weekStartStr, weekAvailability]
+    [store.id, weekStartStr, weekAvailability, coverageFromStoreByEmployee]
   )
 
   function handleSavePdf() {
@@ -352,9 +371,53 @@ export function ScheduleGrid({
     const sourceVal = gridData[copySource.employeeName]?.[copySource.dayOfWeek] ?? ''
     handleCellChange(employeeName, dayOfWeek, sourceVal)
     setCopySource(null)
-    setCopyMode(false)
     setToast('Cell copied.')
     setTimeout(() => setToast(null), 2000)
+  }
+
+  async function handleAddCoverageCellChange(day: number, value: string) {
+    if (!addCoverageFromStoreId || !addCoverageEmployeeName.trim()) {
+      setToast('Select "From store" and enter employee name first.')
+      setTimeout(() => setToast(null), 3000)
+      return
+    }
+    setAddCoverageCells((prev) => ({ ...prev, [day]: value }))
+    try {
+      const res = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: store.id,
+          employeeName: addCoverageEmployeeName.trim(),
+          weekStart: weekStartStr,
+          dayOfWeek: day,
+          shiftValue: value,
+          coveringFromStoreId: addCoverageFromStoreId,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      setRefetchTrigger((t) => t + 1)
+    } catch {
+      setToast('Failed to save. Please try again.')
+      setTimeout(() => setToast(null), 3000)
+    }
+  }
+
+  function handleCellContextMenu(e: React.MouseEvent, emp: string, day: number) {
+    e.preventDefault()
+    if (!canEdit) return
+    if (!copySource) {
+      setCopySource({ employeeName: emp, dayOfWeek: day })
+      setToast('Right-click another cell to paste.')
+      setTimeout(() => setToast(null), 2500)
+      return
+    }
+    if (copySource.employeeName === emp && copySource.dayOfWeek === day) {
+      setCopySource(null)
+      setToast(null)
+      return
+    }
+    handleCellClickForCopy(emp, day)
   }
 
   function showToast(msg: string) {
@@ -362,14 +425,30 @@ export function ScheduleGrid({
     setTimeout(() => setToast(null), 3000)
   }
 
-  function reorderEmployees(fromIndex: number, toIndex: number) {
+  async function reorderEmployees(fromIndex: number, toIndex: number) {
     if (fromIndex === toIndex) return
-    setEmployees((prev) => {
-      const arr = [...prev]
+    const next = (() => {
+      const arr = [...employees]
       const [removed] = arr.splice(fromIndex, 1)
       arr.splice(toIndex, 0, removed)
       return arr
-    })
+    })()
+    setEmployees(next)
+    try {
+      const res = await fetch('/api/schedule-meta', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: store.id,
+          weekStart: weekStartStr,
+          employeeOrder: next,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save order')
+    } catch {
+      setToast('Failed to save order.')
+      setTimeout(() => setToast(null), 3000)
+    }
   }
 
   function handleDragStart(e: React.DragEvent, index: number) {
@@ -514,22 +593,13 @@ export function ScheduleGrid({
               <Trash2 className="w-3 h-3" />
               Delete week
             </button>
-            <button
-              type="button"
-              onClick={() => { setCopyMode(true); setCopySource(null) }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${
-                copyMode
-                  ? 'border-[var(--brand-navy)] bg-[var(--brand-navy)]/10 dark:bg-blue-500/20 text-[var(--brand-navy)] dark:text-blue-200'
-                  : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
-              }`}
-            >
-              <Copy className="w-3 h-3" />
-              Copy cell
-              {copySource && <span className="opacity-80">→ click destination</span>}
-            </button>
-            {!copyMode && (
-              <span className="ml-auto text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">
-                Click to type · Right-click for quick-set
+            {copySource ? (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Copy from selected · Right-click destination to paste
+              </span>
+            ) : (
+              <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">
+                Right-click cell to copy · Right-click another to paste
               </span>
             )}
           </>
@@ -591,51 +661,52 @@ export function ScheduleGrid({
                 <th className="text-left px-4 py-3 w-52 rounded-tl-lg">
                   <span className="text-xs font-semibold uppercase tracking-widest text-white/80">Employee</span>
                 </th>
+                <th className="px-3 py-3 text-center w-14">
+                  <span className="text-xs font-semibold uppercase tracking-widest text-white/80">WTD</span>
+                </th>
                 {DAYS.map((day, i) => {
                   const dayDate = addDays(weekStart, i)
                   const dayKey = DAY_KEYS[i]
                   const storeHour = storeHours[dayKey] ?? '11AM–7PM'
                   return (
-                    <th key={day} className="px-2 py-3 text-center">
+                    <th key={day} className={`px-2 py-3 text-center ${i === DAYS.length - 1 ? 'rounded-tr-lg' : ''}`}>
                       <div className="text-xs font-semibold">{day}, {format(dayDate, 'MMM d')}</div>
                       <div className="text-xs text-white/70 font-normal">{storeHour}</div>
                     </th>
                   )
                 })}
-                <th className="px-4 py-3 text-center rounded-tr-lg">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-white/80">WTD</span>
-                </th>
               </tr>
               <tr className="bg-slate-100 dark:bg-slate-700/80 border-b border-slate-200 dark:border-slate-600">
                 <th className="text-left px-4 py-1.5 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Daily budget goal
+                </th>
+                <th className="px-2 py-1.5 text-center text-xs font-semibold text-slate-800 dark:text-slate-100 w-14">
+                  {formatCurrency(weeklyBudget)}
                 </th>
                 {[0, 1, 2, 3, 4, 5, 6].map((i) => (
                   <th key={i} className="px-2 py-1.5 text-center text-xs font-medium text-slate-700 dark:text-slate-200">
                     {formatCurrency(dailyBudget[i] ?? 0)}
                   </th>
                 ))}
-                <th className="px-4 py-1.5 text-center text-xs font-semibold text-slate-800 dark:text-slate-100">
-                  {formatCurrency(weeklyBudget)}
-                </th>
               </tr>
               <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-600">
                 <th className="text-left px-4 py-1.5 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Daily LY budget
+                </th>
+                <th className="px-2 py-1.5 text-center text-xs font-semibold text-slate-800 dark:text-slate-100 w-14">
+                  {formatCurrency(weeklyLy)}
                 </th>
                 {[0, 1, 2, 3, 4, 5, 6].map((i) => (
                   <th key={i} className="px-2 py-1.5 text-center text-xs font-medium text-slate-700 dark:text-slate-200">
                     {formatCurrency(dailyLy[i] ?? 0)}
                   </th>
                 ))}
-                <th className="px-4 py-1.5 text-center text-xs font-semibold text-slate-800 dark:text-slate-100">
-                  {formatCurrency(weeklyLy)}
-                </th>
               </tr>
               <tr className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
                 <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Promotions
                 </td>
+                <td className="px-2 py-1.5 w-14 border-l border-slate-100 dark:border-slate-600/80" />
                 {DAY_KEYS.map((dayKey) => (
                   <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80">
                     {canEdit ? (
@@ -652,12 +723,12 @@ export function ScheduleGrid({
                     )}
                   </td>
                 ))}
-                <td className="px-2 py-1.5 w-12 border-l border-slate-100 dark:border-slate-600/80" />
               </tr>
               <tr className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
                 <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Workload
                 </td>
+                <td className="px-2 py-1.5 w-14 border-l border-slate-100 dark:border-slate-600/80" />
                 {DAY_KEYS.map((dayKey) => (
                   <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80">
                     {canEdit ? (
@@ -674,7 +745,6 @@ export function ScheduleGrid({
                     )}
                   </td>
                 ))}
-                <td className="px-2 py-1.5 w-12 border-l border-slate-100 dark:border-slate-600/80" />
               </tr>
             </thead>
             <tbody>
@@ -713,48 +783,7 @@ export function ScheduleGrid({
                         <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{emp}</span>
                       </div>
                     </td>
-                    {[0, 1, 2, 3, 4, 5, 6].map((day) => {
-                      const isCopySource = copySource?.employeeName === emp && copySource?.dayOfWeek === day
-                      const cellAvail = weekAvailability?.[emp]?.[day]
-                      const isNa = cellAvail?.type === 'na'
-                      const cellValue = empData[day] ?? ''
-                      const hasPartialConflict =
-                        cellAvail?.type === 'partial' &&
-                        cellAvail.start != null &&
-                        cellAvail.end != null &&
-                        !shiftFitsInWindow(cellValue, cellAvail.start, cellAvail.end)
-                      const readOnly = !canEdit || copyMode || isNa
-                      const window12h =
-                        cellAvail?.start != null && cellAvail?.end != null
-                          ? `${formatTime24to12(cellAvail.start)} – ${formatTime24to12(cellAvail.end)}`
-                          : ''
-                      const cellTitle =
-                        hasPartialConflict
-                          ? `Outside availability — must be within ${window12h}`
-                          : cellAvail?.type === 'partial' && window12h
-                            ? `Available ${window12h}`
-                            : isNa
-                              ? 'N/A — not available'
-                              : undefined
-                      return (
-                        <td
-                          key={day}
-                          className={`px-1.5 py-1.5 ${isCopySource ? 'ring-2 ring-[var(--brand-navy)] ring-offset-1 rounded-lg' : ''} ${isNa ? 'opacity-75' : ''} ${hasPartialConflict ? 'ring-2 ring-red-500 ring-offset-1 rounded-lg bg-red-50/80 dark:bg-red-900/20' : ''}`}
-                          onClick={canEdit && copyMode ? () => handleCellClickForCopy(emp, day) : undefined}
-                          title={cellTitle}
-                        >
-                          <div className={canEdit && copyMode ? 'pointer-events-none' : ''}>
-                            <ShiftCell
-                              value={isNa ? 'N/A' : cellValue}
-                              onChange={(val) => handleCellChange(emp, day, val)}
-                              readOnly={readOnly}
-                              storeColor={store.color}
-                            />
-                          </div>
-                        </td>
-                      )
-                    })}
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-3 py-2 text-center">
                       <div
                         className="text-sm font-bold"
                         style={{ color: store.color }}
@@ -765,9 +794,92 @@ export function ScheduleGrid({
                         <div className="text-xs font-semibold text-red-600 dark:text-red-400">OT</div>
                       )}
                     </td>
+                    {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                      const isCopySource = copySource?.employeeName === emp && copySource?.dayOfWeek === day
+                      const cellAvail = weekAvailability?.[emp]?.[day]
+                      const coverageAwayHere = coverageAway.find((c) => c.employeeName === emp && c.dayOfWeek === day)
+                      const cellValue = coverageAwayHere ? coverageAwayHere.atStoreName : (empData[day] ?? '')
+                      const isOffOrPto = !coverageAwayHere && (empData[day] === 'OFF' || empData[day] === 'PTO')
+                      const isNa = cellAvail?.type === 'na' && !isOffOrPto
+                      const hasPartialConflict =
+                        cellAvail?.type === 'partial' &&
+                        cellAvail.start != null &&
+                        cellAvail.end != null &&
+                        !shiftFitsInWindow(cellValue, cellAvail.start, cellAvail.end)
+                      const readOnly = !canEdit || isNa || isOffOrPto
+                      const window12h =
+                        cellAvail?.start != null && cellAvail?.end != null
+                          ? `${formatTime24to12(cellAvail.start)} – ${formatTime24to12(cellAvail.end)}`
+                          : ''
+                      const cellTitle =
+                        hasPartialConflict
+                          ? `Outside availability — must be within ${window12h}`
+                          : cellAvail?.type === 'partial' && window12h
+                            ? `Available ${window12h}`
+                            : isOffOrPto
+                              ? cellValue === 'PTO' ? 'PTO — paid time off' : 'OFF — requested time off'
+                              : isNa
+                                ? 'Not available'
+                                : undefined
+                      return (
+                        <td
+                          key={day}
+                          className={`px-1.5 py-1.5 ${isCopySource ? 'ring-2 ring-[var(--brand-navy)] ring-offset-1 rounded-lg' : ''} ${(isNa || isOffOrPto) ? 'opacity-90' : ''} ${hasPartialConflict ? 'ring-2 ring-red-500 ring-offset-1 rounded-lg bg-red-50/80 dark:bg-red-900/20' : ''} ${coverageAwayHere ? 'bg-amber-50/80 dark:bg-amber-900/20' : ''}`}
+                          onClick={canEdit && copySource && (copySource.employeeName !== emp || copySource.dayOfWeek !== day) ? () => handleCellClickForCopy(emp, day) : undefined}
+                          onContextMenu={(e) => handleCellContextMenu(e, emp, day)}
+                          title={cellTitle ?? (coverageAwayHere ? `Covering at ${coverageAwayHere.atStoreName}` : undefined)}
+                        >
+                          <div className={coverageAwayHere ? 'pointer-events-none' : canEdit && copySource ? 'pointer-events-none' : ''}>
+                            <ShiftCell
+                              value={cellValue}
+                              onChange={(val) => handleCellChange(emp, day, val)}
+                              readOnly={readOnly || !!coverageAwayHere}
+                              storeColor={store.color}
+                            />
+                          </div>
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
               })}
+              {canEdit && (
+                <tr className="border-b border-slate-100 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Coverage</span>
+                      <select
+                        value={addCoverageFromStoreId ?? ''}
+                        onChange={(e) => setAddCoverageFromStoreId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                        className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                      >
+                        <option value="">From store…</option>
+                        {STORE_CONFIG.filter((s) => s.id !== store.id).map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={addCoverageEmployeeName}
+                        onChange={(e) => setAddCoverageEmployeeName(e.target.value)}
+                        placeholder="Employee name"
+                        className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 w-32 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                      />
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-center text-slate-400 dark:text-slate-500 text-sm">—</td>
+                  {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                    <td key={day} className="px-1.5 py-1.5">
+                      <ShiftCell
+                        value={addCoverageCells[day] ?? ''}
+                        onChange={(val) => handleAddCoverageCellChange(day, val)}
+                        readOnly={!addCoverageFromStoreId || !addCoverageEmployeeName.trim()}
+                        storeColor={store.color}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              )}
             </tbody>
             <tfoot>
               <HoursSummary

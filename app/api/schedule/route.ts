@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { schedules, retailData, trafficWeekly, hourlyTraffic, scheduleWeekMeta } from '@/lib/db/schema'
+import { schedules, retailData, trafficWeekly, hourlyTraffic, scheduleWeekMeta, stores } from '@/lib/db/schema'
 import { and, eq, gte, lte, desc } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isStoreLeader, isFullControl } from '@/lib/roles'
@@ -19,6 +19,7 @@ const postSchema = z.object({
   weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   dayOfWeek: z.number().int().min(0).max(6),
   shiftValue: z.string().optional(),
+  coveringFromStoreId: z.number().int().nullable().optional(),
 })
 
 export async function DELETE(request: Request) {
@@ -172,14 +173,39 @@ export async function GET(request: Request) {
     .where(and(eq(scheduleWeekMeta.storeId, storeId), eq(scheduleWeekMeta.weekStart, weekStart)))
     .limit(1)
 
+  // People from this store covering at another store (show store name in cell on home schedule)
+  const coverageAwayRows = await db
+    .select({
+      employeeName: schedules.employeeName,
+      dayOfWeek: schedules.dayOfWeek,
+      atStoreId: schedules.storeId,
+      atStoreName: stores.name,
+    })
+    .from(schedules)
+    .innerJoin(stores, eq(schedules.storeId, stores.id))
+    .where(
+      and(
+        eq(schedules.coveringFromStoreId, storeId),
+        eq(schedules.weekStart, weekStart)
+      )
+    )
+  const coverageAway = coverageAwayRows.map((r) => ({
+    employeeName: r.employeeName,
+    dayOfWeek: r.dayOfWeek,
+    atStoreId: r.atStoreId,
+    atStoreName: r.atStoreName,
+  }))
+
   const weekMeta = {
     workload: weekMetaRow?.workload ?? null,
     promotions: weekMetaRow?.promotions ?? null,
     hoursOverride: weekMetaRow?.hoursOverride ?? null,
+    employeeOrder: (weekMetaRow?.employeeOrder as string[] | null) ?? null,
   }
 
   return NextResponse.json({
     data,
+    coverageAway,
     weeklyBudget,
     weeklyLy,
     dailyBudget,
@@ -216,12 +242,14 @@ export async function POST(request: Request) {
         weekStart: validated.weekStart,
         dayOfWeek: validated.dayOfWeek,
         shiftValue: validated.shiftValue ?? null,
+        coveringFromStoreId: validated.coveringFromStoreId ?? null,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: [schedules.storeId, schedules.employeeName, schedules.weekStart, schedules.dayOfWeek],
         set: {
           shiftValue: sql`excluded.shift_value`,
+          ...(validated.coveringFromStoreId !== undefined && { coveringFromStoreId: validated.coveringFromStoreId }),
           updatedAt: new Date(),
         },
       })

@@ -27,6 +27,7 @@ export const schedules = pgTable(
     weekStart: date('week_start').notNull(),
     dayOfWeek: integer('day_of_week').notNull(), // 0=Sun 6=Sat
     shiftValue: text('shift_value'),
+    coveringFromStoreId: integer('covering_from_store_id').references(() => stores.id), // when set: person normally works at that store, covering here
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => ({
@@ -34,7 +35,7 @@ export const schedules = pgTable(
   })
 )
 
-/** Per-week metadata: workload, promotions (per-day), optional hours override for the schedule. */
+/** Per-week metadata: workload, promotions (per-day), optional hours override, employee order. */
 export const scheduleWeekMeta = pgTable(
   'schedule_week_meta',
   {
@@ -44,6 +45,7 @@ export const scheduleWeekMeta = pgTable(
     workload: jsonb('workload'), // { sun: string, mon: string, ... } per-day
     promotions: jsonb('promotions'), // { sun: string, mon: string, ... } per-day
     hoursOverride: jsonb('hours_override'), // { sun: string, mon: string, ... } when set, schedule uses this instead of store.hours
+    employeeOrder: jsonb('employee_order'), // string[] of employee names; order shown on schedule
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => ({

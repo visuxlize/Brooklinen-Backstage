@@ -5,7 +5,7 @@ import { rtoRequests } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isStoreLeader } from '@/lib/roles'
-import { applyRtoApprovalToAvailabilityAndSchedule } from '@/lib/rtoAvailabilitySync'
+import { applyRtoApprovalToAvailabilityAndSchedule, revertRtoFromSchedule } from '@/lib/rtoAvailabilitySync'
 import { getAppUrl } from '@/lib/app-config'
 
 const patchSchema = z.object({
@@ -38,6 +38,22 @@ export async function PATCH(
 
     if (isStoreLeader(user) && user.storeId !== existing.storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // When undoing approval (revert to pending): clear OFF/PTO/partial from schedule so days are open again
+    if (status === 'pending' && existing.status === 'approved') {
+      try {
+        await revertRtoFromSchedule({
+          storeId: existing.storeId,
+          employeeName: existing.employeeName,
+          employeeEmail: existing.employeeEmail,
+          requestedDays: existing.requestedDays,
+          startDate: existing.startDate ?? undefined,
+          endDate: existing.endDate ?? undefined,
+        })
+      } catch (e) {
+        console.error('Failed to revert RTO from schedule:', e)
+      }
     }
 
     const [updated] = await db
@@ -96,6 +112,53 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid input', details: error.errors }, { status: 400 })
     }
     console.error('RTO PATCH error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  try {
+    const { id } = await params
+    const [existing] = await db
+      .select()
+      .from(rtoRequests)
+      .where(eq(rtoRequests.id, id))
+      .limit(1)
+
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    if (isStoreLeader(user) && user.storeId !== existing.storeId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (existing.status === 'approved') {
+      try {
+        await revertRtoFromSchedule({
+          storeId: existing.storeId,
+          employeeName: existing.employeeName,
+          employeeEmail: existing.employeeEmail,
+          requestedDays: existing.requestedDays,
+          startDate: existing.startDate ?? undefined,
+          endDate: existing.endDate ?? undefined,
+        })
+      } catch (e) {
+        console.error('Failed to revert RTO from schedule on delete:', e)
+      }
+    }
+
+    await db.delete(rtoRequests).where(eq(rtoRequests.id, id))
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('RTO DELETE error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
