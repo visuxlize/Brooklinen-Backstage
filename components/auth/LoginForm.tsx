@@ -22,7 +22,7 @@ export function LoginForm({ signOutOnly }: { signOutOnly?: boolean } = {}) {
     if (error) {
       setError(error.message)
     } else {
-      window.location.href = '/schedule'
+      window.location.href = '/dashboard'
       return
     }
     setLoading(false)
