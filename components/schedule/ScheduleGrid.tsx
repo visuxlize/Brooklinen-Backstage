@@ -158,7 +158,7 @@ export function ScheduleGrid({
           const mainOrdered = order && order.length
             ? [...order.filter((n: string) => initialEmployees.includes(n)), ...initialEmployees.filter((n) => !order.includes(n))]
             : [...initialEmployees]
-          const coverageNames: string[] = [...new Set(data.filter((r: { coveringFromStoreId?: number | null }) => r.coveringFromStoreId).map((r: { employeeName: string }) => r.employeeName))].filter((n: string) => !mainOrdered.includes(n))
+          const coverageNames = [...new Set<string>(data.filter((r: { coveringFromStoreId?: number | null }) => r.coveringFromStoreId).map((r: { employeeName: string }) => r.employeeName))].filter((n) => !mainOrdered.includes(n))
           setEmployees([...mainOrdered, ...coverageNames])
           setWeeklyBudget(typeof json.weeklyBudget === 'number' ? json.weeklyBudget : null)
           setWeeklyLy(typeof json.weeklyLy === 'number' ? json.weeklyLy : null)
