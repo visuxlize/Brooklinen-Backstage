@@ -506,7 +506,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
           </div>
           <span className="text-xs text-slate-500 dark:text-slate-400 mt-2">{trendDirection}</span>
           <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-            Updated: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            Drives 5-week projection below · Updated: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
         </div>
         <StatCard
@@ -531,7 +531,8 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Bar chart */}
         <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Daily Traffic Breakdown</h2>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Daily Traffic Breakdown</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Most recent week · Sun–Sat counts</p>
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 7 }).map((_, i) => (
@@ -617,25 +618,31 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         </div>
       </div>
 
-      {/* 5-week projection + Peak hours + 53-week history */}
+      {/* 5-week projection (Apps Script: refreshProjectionRows — LY week + trend → projected, day % shares) + Peak hours + 53-week history */}
       <div className="mt-6 grid lg:grid-cols-2 gap-6">
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-3">5-Week Projection</h2>
-            <div className="overflow-x-auto">
+          <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 overflow-hidden">
+            <div className="bg-emerald-700 px-4 py-2">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wide">5-Week Projection</h2>
+              <p className="text-xs text-emerald-100 mt-0.5">LY traffic × (1 + trend) → projected; day % = share of projected week</p>
+            </div>
+            <div className="p-4 overflow-x-auto">
               <table className="w-full min-w-[320px] text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-600">
-                    <th className="text-left py-2 px-2 text-slate-500 dark:text-slate-400">Metric</th>
-                    {projectionRows.map((_, i) => (
-                      <th key={i} className="text-center py-2 px-1 font-medium text-slate-600 dark:text-slate-300">
-                        Week {i + 1}
+                    <th className="text-left py-2 px-2 text-slate-500 dark:text-slate-400 font-semibold">Metric</th>
+                    {projectionRows.map((r, i) => (
+                      <th key={i} className="text-center py-2 px-1 font-semibold text-slate-700 dark:text-slate-200">
+                        Week {i + 1}<br />
+                        <span className="font-normal text-slate-500 dark:text-slate-400">
+                          {new Date(r.weekStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-b border-slate-100 dark:border-slate-700">
+                  <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
                     <td className="py-1.5 px-2 text-slate-500 dark:text-slate-400">Week date</td>
                     {projectionRows.map((r, i) => (
                       <td key={i} className="py-1.5 px-1 text-center text-slate-700 dark:text-slate-200">
@@ -646,21 +653,21 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                   <tr className="border-b border-slate-100 dark:border-slate-700">
                     <td className="py-1.5 px-2 text-slate-500 dark:text-slate-400">LY traffic</td>
                     {projectionRows.map((r, i) => (
-                      <td key={i} className="py-1.5 px-1 text-center text-slate-700 dark:text-slate-200">
+                      <td key={i} className="py-1.5 px-1 text-center text-blue-700 dark:text-blue-400 font-medium">
                         {Math.round(r.lyTotal).toLocaleString()}
                       </td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-100 dark:border-slate-700">
-                    <td className="py-1.5 px-2 text-slate-500 dark:text-slate-400">Projected</td>
+                  <tr className="border-b border-slate-100 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-900/20">
+                    <td className="py-1.5 px-2 text-slate-600 dark:text-slate-300 font-medium">Projected</td>
                     {projectionRows.map((r, i) => (
-                      <td key={i} className="py-1.5 px-1 text-center font-medium text-green-700 dark:text-green-400">
+                      <td key={i} className="py-1.5 px-1 text-center font-bold text-emerald-800 dark:text-emerald-300">
                         {Math.round(r.projTotal).toLocaleString()}
                       </td>
                     ))}
                   </tr>
                   {DAYS.map((day, d) => (
-                    <tr key={day} className="border-b border-slate-100 dark:border-slate-700">
+                    <tr key={day} className={`border-b border-slate-100 dark:border-slate-700 ${d % 2 === 0 ? 'bg-slate-50/50 dark:bg-slate-800/50' : ''}`}>
                       <td className="py-1 px-2 text-slate-500 dark:text-slate-400">{day} %</td>
                       {projectionRows.map((r, i) => (
                         <td key={i} className="py-1 px-1 text-center text-slate-600 dark:text-slate-300">
@@ -673,10 +680,12 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
               </table>
             </div>
           </div>
-          <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-3">Peak Traffic Hours</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Based on historical hourly data</p>
-            <div className="overflow-x-auto">
+          <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 overflow-hidden">
+            <div className="bg-emerald-700 px-4 py-2">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wide">Peak Traffic Hours</h2>
+              <p className="text-xs text-emerald-100 mt-0.5">Based on historical hourly data</p>
+            </div>
+            <div className="p-4 overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-600">
@@ -689,14 +698,14 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {peakRows.map((row) => (
-                    <tr key={row.day} className="border-b border-slate-50 dark:border-slate-700">
+                  {peakRows.map((row, ri) => (
+                    <tr key={row.day} className={`border-b border-slate-100 dark:border-slate-700 ${ri % 2 === 0 ? 'bg-slate-50/50 dark:bg-slate-800/50' : ''}`}>
                       <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-200">{row.day}</td>
-                      <td className="py-2 px-2 text-slate-600 dark:text-slate-300">{row.peakHour}</td>
+                      <td className="py-2 px-2 font-medium text-orange-700 dark:text-orange-400">{row.peakHour}</td>
                       <td className="py-2 px-2 text-slate-600 dark:text-slate-300">{row.secondPeak}</td>
                       <td className="py-2 px-2 text-slate-600 dark:text-slate-300">{row.slowHour}</td>
-                      <td className="py-2 px-2 font-medium text-green-700 dark:text-green-400">{row.busiestWindow}</td>
-                      <td className="py-2 px-2 text-right font-medium text-green-700 dark:text-green-400">
+                      <td className="py-2 px-2 font-semibold text-teal-700 dark:text-teal-400">{row.busiestWindow}</td>
+                      <td className="py-2 px-2 text-right font-bold text-slate-800 dark:text-slate-100">
                         {(row.pctOfDay * 100).toFixed(0)}%
                       </td>
                     </tr>
