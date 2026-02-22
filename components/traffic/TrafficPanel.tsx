@@ -11,6 +11,12 @@ import {
   type WeeklyTrafficRow,
   type HourlyTrafficRow,
 } from '@/lib/trafficCalculations'
+import {
+  parseTrafficExcel,
+  buildUploadResult,
+  storeNameMatches,
+  type TrafficUploadResult,
+} from '@/lib/trafficExcelParser'
 
 const DAY_HEADERS_LOWER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
@@ -298,10 +304,12 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
   const [excelError, setExcelError] = useState<string | null>(null)
   const [applyingExcel, setApplyingExcel] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadResult, setUploadResult] = useState<TrafficUploadResult | null>(null)
 
   const [hourlyData, setHourlyData] = useState<Array<{ hour: number; dayOfWeek: number; avgCount: string | null; dailyTotal: string | null; pctOfDay: string | null }>>([])
 
   useEffect(() => {
+    setUploadResult(null)
     async function fetchData() {
       setLoading(true)
       try {
@@ -325,20 +333,28 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
       : null
   const trafficCountNum = latest?.trafficCount != null ? Number(latest.trafficCount) : null
   const totalNum = latest?.total != null ? Number(latest.total) : null
-  const trendUp = trendMult !== null && trendMult >= 0.02
-  const trendDown = trendMult !== null && trendMult <= -0.02
-  const trendDirection = trendUp ? '▲ Trending Up' : trendDown ? '▼ Trending Down' : '→ Stable'
-
-  // Find peak window from latest data
-  function getPeakDay(): string {
+  function getPeakDayFromApi(): string {
     if (!latest) return '—'
     const vals = DAY_KEYS.map((k, i) => ({ day: DAYS[i], val: Number(latest[k] ?? 0) }))
     const peak = vals.reduce((a, b) => (b.val > a.val ? b : a), vals[0])
     return peak.val > 0 ? peak.day : '—'
   }
 
-  const weekMax = latest
-    ? Math.max(...DAY_KEYS.map((k) => Number(latest[k] ?? 0)))
+  const trendMultDisplay = uploadResult != null ? uploadResult.trendMultiplier : trendMult
+  const trafficCountDisplay = uploadResult != null ? uploadResult.trafficCount : trafficCountNum
+  const totalNumDisplay = uploadResult != null ? uploadResult.weeklyTotal : totalNum
+  const peakDayDisplay = uploadResult != null ? uploadResult.peakDay : getPeakDayFromApi()
+  const trendUp = trendMultDisplay !== null && trendMultDisplay >= 0.02
+  const trendDown = trendMultDisplay !== null && trendMultDisplay <= -0.02
+  const trendDirection = trendUp ? '▲ Trending Up' : trendDown ? '▼ Trending Down' : '→ Stable'
+
+  const recentWeekBreakdownDisplay = uploadResult
+    ? uploadResult.recentWeekBreakdown
+    : latest
+      ? ([Number(latest.sun ?? 0), Number(latest.mon ?? 0), Number(latest.tue ?? 0), Number(latest.wed ?? 0), Number(latest.thu ?? 0), Number(latest.fri ?? 0), Number(latest.sat ?? 0)] as const)
+      : null
+  const weekMax = recentWeekBreakdownDisplay
+    ? Math.max(...recentWeekBreakdownDisplay)
     : 0
 
   // SECTION 1: 5-Week Projection — schedule weeks = next 5 Sundays
@@ -368,9 +384,18 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
     trendMultiplier: trendMult ?? 0,
     recentCount: trafficCountNum ?? null,
   }
-  const projectionRows = computeFiveWeekProjection(weeklyHistory, trendData, scheduleWeeks)
+  const projectionRowsApi = computeFiveWeekProjection(weeklyHistory, trendData, scheduleWeeks)
+  const projectionRowsDisplay =
+    uploadResult != null
+      ? uploadResult.projections.map((p) => ({
+          weekStart: p.weekStart,
+          lyTotal: p.lyTotal,
+          projectedTotal: p.projTotal,
+          dayShares: p.dayShares,
+        }))
+      : projectionRowsApi
 
-  // SECTION 2: Peak Hours Summary — hours 10–20, sort by avgCount, window = top 3, % = sum(top3)/dailyTotal
+  // SECTION 2: Peak Hours Summary — from API (hour 10–20) or from upload (hourlyByDay)
   const hourlyRows: HourlyTrafficRow[] = hourlyData.map((r) => ({
     hour: r.hour,
     dayOfWeek: r.dayOfWeek,
@@ -379,7 +404,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
     pctOfDay: r.pctOfDay != null ? Number(r.pctOfDay) : null,
   }))
   const peakResults = computePeakHoursSummary(hourlyRows, DAYS)
-  const peakRows = peakResults.map((p) => ({
+  const peakRowsApi = peakResults.map((p) => ({
     day: p.dayName,
     peakHour: `${formatHour(p.peakHour)} (${Math.round(p.peakAvg)} avg)`,
     secondPeak: `${formatHour(p.secondPeakHour)} (${Math.round(p.secondPeakAvg)} avg)`,
@@ -387,6 +412,17 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
     busiestWindow: `${formatHour(p.busiestWindowStart)} – ${formatHour(p.busiestWindowEnd)}`,
     pctOfDay: p.windowPctOfDay,
   }))
+  const peakRowsDisplay =
+    uploadResult != null
+      ? uploadResult.peakHours.map((p) => ({
+          day: p.day,
+          peakHour: p.peak1,
+          secondPeak: p.peak2,
+          slowHour: p.slowHour,
+          busiestWindow: p.busyWindow,
+          pctOfDay: parseInt(p.windowPct, 10) / 100,
+        }))
+      : peakRowsApi
 
   function getDefaultWeekStartForRow(rowIndex: number): string {
     const now = new Date()
@@ -401,6 +437,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
     e.target.value = ''
     setExcelError(null)
     setExcelWeeks([])
+    setUploadResult(null)
     if (!file) return
     const name = (file.name || '').toLowerCase()
     if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
@@ -410,14 +447,59 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
     try {
       const XLSX = await import('xlsx')
       const ab = await file.arrayBuffer()
-      const wb = XLSX.read(ab, { type: 'array' })
+      const wb = XLSX.read(ab, { type: 'array', cellDates: true })
+
+      const parsed = parseTrafficExcel(wb, XLSX.utils)
+      if (parsed) {
+        if (!storeNameMatches(parsed.storeName, store.id, store.name)) {
+          setExcelError(`This file is for "${parsed.storeName}". Upload a file for ${store.name} (e.g. Retail_Traffic_Data_Pulls_${store.name.replace(/\s+/g, '_')}.xlsx).`)
+          return
+        }
+        const result = buildUploadResult(parsed)
+        setUploadResult(result)
+
+        const weeks = result.historyTable.map((row) => {
+          const [sun, mon, tue, wed, thu, fri, sat] = row.days
+          const isMostRecent = row.weekOf === result.mostRecentWeek
+          return {
+            weekStart: row.weekOf,
+            sun,
+            mon,
+            tue,
+            wed,
+            thu,
+            fri,
+            sat,
+            total: row.total,
+            ...(isMostRecent && { trendMult: String(result.trendMultiplier), trafficCount: result.trafficCount }),
+          }
+        })
+        const res = await fetch('/api/traffic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storeId: store.id, weeks }),
+        })
+        if (res.ok) {
+          const fetchRes = await fetch(`/api/traffic?storeId=${store.id}&_=${Date.now()}`, { cache: 'no-store' })
+          if (fetchRes.ok) {
+            const { weekly, hourly } = await fetchRes.json()
+            setWeeklyData(Array.isArray(weekly) ? weekly : [])
+            setHourlyData(Array.isArray(hourly) ? hourly : [])
+          }
+          setToast('Traffic data updated. All sections reflect the uploaded file.')
+        } else {
+          setToast('Display updated from file. Save to server failed — try again.')
+        }
+        setTimeout(() => setToast(null), 4000)
+        return
+      }
 
       const trendFound = wb.SheetNames.some(isTrendSheetName)
       const histFound = wb.SheetNames.some(isHistSheetName)
       type XLSXUtils = { utils: { sheet_to_json: (sheet: unknown, opts: { header: number; defval: string }) => (string | number)[][] } }
-      const parsed = (trendFound || histFound) ? parseRetailTrafficWorkbook(wb, store, XLSX as XLSXUtils) : { weeks: [] }
-      if (parsed.weeks.length > 0) {
-        setExcelWeeks(parsed.weeks)
+      const legacyParsed = (trendFound || histFound) ? parseRetailTrafficWorkbook(wb, store, XLSX as XLSXUtils) : { weeks: [] }
+      if (legacyParsed.weeks.length > 0) {
+        setExcelWeeks(legacyParsed.weeks)
         return
       }
 
@@ -431,14 +513,14 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
           allWeeks.push(row)
         }
       }
-      if (allWeeks.length > 0 && (parsed.trendCount != null || parsed.trendMult != null)) {
+      if (allWeeks.length > 0 && (legacyParsed.trendCount != null || legacyParsed.trendMult != null)) {
         const first = { ...allWeeks[0] }
-        if (parsed.trendCount != null) first.trafficCount = parsed.trendCount
-        if (parsed.trendMult != null) first.trendMult = String(parsed.trendMult)
+        if (legacyParsed.trendCount != null) first.trafficCount = legacyParsed.trendCount
+        if (legacyParsed.trendMult != null) first.trendMult = String(legacyParsed.trendMult)
         allWeeks[0] = first
       }
       setExcelWeeks(allWeeks)
-      if (allWeeks.length === 0) setExcelError('No valid week rows found. Use Retail Traffic Data Pulls format with "Last 5 Weeks Traffic Trends" and "Historical Week Data" (or sheets with Sun–Sat columns).')
+      if (allWeeks.length === 0) setExcelError('No valid week rows found. Use Retail Traffic Data Pulls format with "Last 5 Weeks Traffic Trends" and "Historical Week Data - Last Com".')
     } catch (err) {
       setExcelError(err instanceof Error ? err.message : 'Failed to read Excel file.')
     }
@@ -495,16 +577,16 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         <p className="text-sm text-slate-500 mt-1">{store.name} · {store.city}</p>
       </div>
 
-      {/* Trend card + stats (match image 3) */}
+      {/* Section 1: KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-4 flex flex-col">
-          <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">Trend mult</span>
+          <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">TREND MULT</span>
           <div
             className={`mt-1 px-3 py-1.5 rounded-lg inline-block w-fit text-sm font-bold ${
               trendUp ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' : trendDown ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
             }`}
           >
-            {trendMult !== null ? `${(trendMult * 100).toFixed(2)}%` : '—'}
+            {trendMultDisplay != null ? `${(trendMultDisplay * 100).toFixed(2)}%` : '—'}
           </div>
           <span className="text-xs text-slate-500 dark:text-slate-400 mt-2">{trendDirection}</span>
           <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
@@ -512,20 +594,21 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
           </span>
         </div>
         <StatCard
-          label="Traffic count"
-          value={trafficCountNum != null ? trafficCountNum.toLocaleString() : '—'}
+          label="TRAFFIC COUNT"
+          value={trafficCountDisplay != null ? trafficCountDisplay.toLocaleString() : '—'}
+          subValue="Last 5 weeks (current period)"
           accentColor={store.color}
           icon={<Users className="w-4 h-4" />}
         />
         <StatCard
-          label="Peak day"
-          value={getPeakDay()}
+          label="PEAK DAY"
+          value={peakDayDisplay}
           accentColor={store.color}
           icon={<Clock className="w-4 h-4" />}
         />
         <StatCard
-          label="Weekly total"
-          value={totalNum != null ? totalNum.toLocaleString() : '—'}
+          label="WEEKLY TOTAL"
+          value={totalNumDisplay != null ? totalNumDisplay.toLocaleString() : '—'}
           accentColor={store.color}
         />
       </div>
@@ -541,13 +624,12 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                 <div key={i} className="h-8 bg-slate-100 dark:bg-slate-700 rounded animate-pulse" />
               ))}
             </div>
-          ) : !latest ? (
+          ) : !recentWeekBreakdownDisplay ? (
             <div className="text-center py-12 text-slate-400 dark:text-slate-400 text-sm">No traffic data yet</div>
           ) : (
             <div className="space-y-2">
               {DAYS.map((day, i) => {
-                const key = DAY_KEYS[i]
-                const val = Number(latest[key] ?? 0)
+                const val = recentWeekBreakdownDisplay[i] ?? 0
                 const pct = weekMax > 0 ? (val / weekMax) * 100 : 0
                 return (
                   <div key={day} className="flex items-center gap-3">
@@ -572,7 +654,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Upload Excel</h2>
           <p className="text-xs text-slate-400 dark:text-slate-400 mb-3">
-            Use <strong>Retail Traffic Data Pulls</strong> (e.g. <em>Retail Traffic Data Pulls_Williamsburg.xlsx</em> or <em>_WB.xlsx</em>): <em>Last 5 Weeks Traffic Trends</em> (traffic count + trend) and <em>Historical Week Data</em> / <em>53 Week Data</em>. Data applies to the store you’re viewing and updates the daily breakdown, KPI cards, 53-week history, and 5-week projection.
+            Upload a file named for this store, e.g. <em>Retail_Traffic_Data_Pulls_{store.name.replace(/\s+/g, '_')}.xlsx</em>. Must include sheets: <strong>Last 5 Weeks Traffic Trends</strong> (row 3 = store, traffic count, trend) and <strong>Historical Week Data - Last Com</strong> (53 weeks × 11 hours). All sections update automatically.
           </p>
           <input
             ref={fileInputRef}
@@ -633,7 +715,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-600">
                     <th className="text-left py-2 px-2 text-slate-500 dark:text-slate-400 font-semibold">Metric</th>
-                    {projectionRows.map((r, i) => (
+                    {projectionRowsDisplay.map((r, i) => (
                       <th key={i} className="text-center py-2 px-1 font-semibold text-slate-700 dark:text-slate-200">
                         Week {i + 1}<br />
                         <span className="font-normal text-slate-500 dark:text-slate-400">
@@ -646,15 +728,15 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                 <tbody>
                   <tr className="border-b border-slate-100 dark:border-slate-700">
                     <td className="py-1.5 px-2 text-slate-500 dark:text-slate-400 font-medium">LY Traffic</td>
-                    {projectionRows.map((r, i) => (
+                    {projectionRowsDisplay.map((r, i) => (
                       <td key={i} className="py-1.5 px-1 text-center text-blue-700 dark:text-blue-400 font-medium">
-                        {Math.round(r.lyTotal).toLocaleString()}
+                        {r.lyTotal === 0 ? '—' : Math.round(r.lyTotal).toLocaleString()}
                       </td>
                     ))}
                   </tr>
                   <tr className="border-b border-slate-100 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-900/20">
                     <td className="py-1.5 px-2 text-slate-600 dark:text-slate-300 font-medium">Projected Traffic</td>
-                    {projectionRows.map((r, i) => (
+                    {projectionRowsDisplay.map((r, i) => (
                       <td key={i} className="py-1.5 px-1 text-center font-bold text-emerald-800 dark:text-emerald-300">
                         {Math.round(r.projectedTotal).toLocaleString()}
                       </td>
@@ -663,7 +745,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                   {DAYS.map((day, d) => (
                     <tr key={day} className={`border-b border-slate-100 dark:border-slate-700 ${d % 2 === 0 ? 'bg-slate-50/50 dark:bg-slate-800/50' : ''}`}>
                       <td className="py-1 px-2 text-slate-500 dark:text-slate-400">{day} %</td>
-                      {projectionRows.map((r, i) => (
+                      {projectionRowsDisplay.map((r, i) => (
                         <td key={i} className="py-1 px-1 text-center text-slate-600 dark:text-slate-300">
                           {(r.dayShares[d] * 100).toFixed(0)}%
                         </td>
@@ -692,7 +774,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {peakRows.map((row, ri) => (
+                  {peakRowsDisplay.map((row, ri) => (
                     <tr key={row.day} className={`border-b border-slate-100 dark:border-slate-700 ${ri % 2 === 0 ? 'bg-slate-50/50 dark:bg-slate-800/50' : ''}`}>
                       <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-200">{row.day}</td>
                       <td className="py-2 px-2 font-medium text-orange-700 dark:text-orange-400">{row.peakHour}</td>
@@ -709,7 +791,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
             </div>
           </div>
         </div>
-        {weeklyData.length > 0 && (
+        {((uploadResult ? uploadResult.historyTable.length > 0 : weeklyData.length > 0) && (
           <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">53 Week Traffic History</h2>
             <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
@@ -730,26 +812,52 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {weeklyData.slice(0, 53).map((row) => (
-                    <tr key={row.id} className="border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                      <td className="py-2 px-3 font-medium text-slate-700 dark:text-slate-200">
-                        {new Date(row.weekStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-                      {DAY_KEYS.map((k) => (
-                        <td key={k} className="py-2 px-2 text-center text-slate-600 dark:text-slate-300">
-                          {Number(row[k] ?? 0).toLocaleString()}
-                        </td>
+                  {uploadResult
+                    ? uploadResult.historyTable.slice(0, 53).map((row) => {
+                        const avgTotal =
+                          uploadResult.historyTable.length > 0
+                            ? uploadResult.historyTable.reduce((s, r) => s + r.total, 0) / uploadResult.historyTable.length
+                            : 0
+                        const isAboveAvg = row.total > avgTotal
+                        return (
+                          <tr
+                            key={row.weekOf}
+                            className={`border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30 ${isAboveAvg ? 'font-medium' : ''}`}
+                          >
+                            <td className="py-2 px-3 font-medium text-slate-700 dark:text-slate-200">
+                              {new Date(row.weekOf + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </td>
+                            {row.days.map((val, k) => (
+                              <td key={k} className="py-2 px-2 text-center text-slate-600 dark:text-slate-300">
+                                {val.toLocaleString()}
+                              </td>
+                            ))}
+                            <td className={`py-2 px-3 text-center font-semibold ${isAboveAvg ? 'text-green-700 dark:text-green-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                              {row.total.toLocaleString()}
+                            </td>
+                          </tr>
+                        )
+                      })
+                    : weeklyData.slice(0, 53).map((row) => (
+                        <tr key={row.id} className="border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                          <td className="py-2 px-3 font-medium text-slate-700 dark:text-slate-200">
+                            {new Date(row.weekStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </td>
+                          {DAY_KEYS.map((k) => (
+                            <td key={k} className="py-2 px-2 text-center text-slate-600 dark:text-slate-300">
+                              {Number(row[k] ?? 0).toLocaleString()}
+                            </td>
+                          ))}
+                          <td className="py-2 px-3 text-center font-semibold text-green-700 dark:text-green-400">
+                            {Number(row.total ?? 0).toLocaleString()}
+                          </td>
+                        </tr>
                       ))}
-                      <td className="py-2 px-3 text-center font-semibold text-green-700 dark:text-green-400">
-                        {Number(row.total ?? 0).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>
           </div>
-        )}
+        ))}
       </div>
 
       {toast && (
