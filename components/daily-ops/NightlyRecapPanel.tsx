@@ -31,6 +31,15 @@ const IN_STORE_EVENT_OPTIONS = [
   { value: 'Yes', label: 'Yes' },
 ]
 
+function formatRecapDate(dateStr: string): string {
+  if (!dateStr || dateStr.length < 10) return dateStr
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 type ActualKey = 'netRevenue' | 'orders' | 'upt' | 'traffic' | 'returns' | 'aov' | 'cvr'
 
 const COLS: { key: ActualKey; label: string }[] = [
@@ -127,43 +136,90 @@ export function NightlyRecapPanel() {
     const el = recapRef.current
     if (!el) return
     setSavingImage(true)
-    const savedStyles: { el: HTMLElement; minWidth: string }[] = []
-    const textareaHeights: { el: HTMLTextAreaElement; height: string }[] = []
     try {
-      // Temporarily expand container to full content width so table/inputs don't clip
-      savedStyles.push({ el, minWidth: el.style.minWidth })
-      el.style.minWidth = `${el.scrollWidth}px`
-      // Expand all textareas to full content height so no vertical clipping when saving screenshot
-      const textareas = el.querySelectorAll('textarea')
-      textareas.forEach((ta) => {
-        textareaHeights.push({ el: ta as HTMLTextAreaElement, height: (ta as HTMLTextAreaElement).style.height })
-        ;(ta as HTMLTextAreaElement).style.overflow = 'visible'
-        ;(ta as HTMLTextAreaElement).style.minHeight = `${Math.max((ta as HTMLTextAreaElement).scrollHeight, 60)}px`
-        ;(ta as HTMLTextAreaElement).style.height = 'auto'
-        ;(ta as HTMLTextAreaElement).style.height = `${Math.max((ta as HTMLTextAreaElement).scrollHeight, 60)}px`
+      const clone = el.cloneNode(true) as HTMLElement
+      clone.style.position = 'fixed'
+      clone.style.top = '-9999px'
+      clone.style.left = '0'
+      clone.style.width = `${el.offsetWidth}px`
+      clone.style.minWidth = `${el.offsetWidth}px`
+      clone.style.maxWidth = `${el.offsetWidth}px`
+      clone.style.background = '#ffffff'
+      clone.style.overflowX = 'hidden'
+      clone.style.overflowY = 'visible'
+      document.body.appendChild(clone)
+
+      const getStyle = (node: Element) => getComputedStyle(node)
+
+      clone.querySelectorAll('select').forEach((sel) => {
+        const opt = sel.options[sel.selectedIndex]
+        const val = opt?.text ?? (sel as HTMLSelectElement).value ?? '—'
+        const div = document.createElement('div')
+        div.textContent = val
+        div.style.cssText = `
+          font-size: ${getStyle(sel).fontSize};
+          font-family: ${getStyle(sel).fontFamily};
+          color: #1a2332;
+          padding: 8px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          background: #f9fafb;
+          width: ${(sel as HTMLElement).offsetWidth}px;
+          box-sizing: border-box;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        `
+        sel.parentNode?.replaceChild(div, sel)
       })
-      // Let layout settle
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
-      const w = el.scrollWidth
-      const h = el.scrollHeight
-      const canvas = await html2canvas(el, {
-        useCORS: true,
+
+      clone.querySelectorAll('textarea, input[type="text"], input[type="number"]').forEach((inp) => {
+        const el = inp as HTMLTextAreaElement | HTMLInputElement
+        const val = el.value ?? ''
+        const div = document.createElement('div')
+        div.textContent = val || ' '
+        div.style.cssText = `
+          font-size: ${getStyle(el).fontSize};
+          font-family: ${getStyle(el).fontFamily};
+          color: #1a2332;
+          padding: 8px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          background: #ffffff;
+          width: 100%;
+          box-sizing: border-box;
+          min-height: ${el.tagName === 'TEXTAREA' ? `${Math.max((el as HTMLTextAreaElement).scrollHeight, 60)}px` : 'auto'};
+          word-wrap: break-word;
+          white-space: pre-wrap;
+        `
+        el.parentNode?.replaceChild(div, el)
+      })
+
+      await new Promise((r) => setTimeout(r, 100))
+
+      const w = clone.scrollWidth
+      const h = clone.scrollHeight
+      const canvas = await html2canvas(clone, {
         scale: 2,
-        width: w,
-        height: h,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
         scrollX: 0,
         scrollY: 0,
-        backgroundColor: '#ffffff',
+        windowWidth: w,
+        windowHeight: h,
+        width: w,
+        height: h,
         logging: false,
       } as Parameters<typeof html2canvas>[1])
-      const dataUrl = canvas.toDataURL('image/png')
+
+      document.body.removeChild(clone)
+
       const link = document.createElement('a')
       link.download = `nightly-recap-${selectedStore}-${selectedDate}.png`
-      link.href = dataUrl
+      link.href = canvas.toDataURL('image/png')
       link.click()
     } finally {
-      savedStyles.forEach(({ el: e, minWidth }) => { e.style.minWidth = minWidth })
-      textareaHeights.forEach(({ el: ta, height }) => { ta.style.height = height; ta.style.minHeight = ''; ta.style.overflow = '' })
       setSavingImage(false)
     }
   }
@@ -188,7 +244,7 @@ export function NightlyRecapPanel() {
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Date</p>
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{selectedDate}</p>
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{formatRecapDate(selectedDate)}</p>
         </div>
         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4">
           <div>

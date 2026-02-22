@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import html2canvas from 'html2canvas'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format, addDays } from 'date-fns'
 import { getWeekStartByIndex, getTotalWeeks } from '@/lib/scheduleWeeks'
@@ -86,6 +87,7 @@ export function ScheduleGrid({
     setDailyLy(initialDailyLy ?? [0, 0, 0, 0, 0, 0, 0])
   }, [initialDailyBudget, initialDailyLy])
   const [emailState, setEmailState] = useState<'idle' | 'loading' | 'sent'>('idle')
+  const [savingScheduleImage, setSavingScheduleImage] = useState(false)
   const [employees, setEmployees] = useState<string[]>(initialEmployees)
 
   // When store changes, reset to initial then fetch will repopulate with order + coverage
@@ -359,6 +361,62 @@ export function ScheduleGrid({
     }
   }
 
+  async function handleSaveScheduleAsImage() {
+    const el = gridRef.current
+    if (!el) return
+    setSavingScheduleImage(true)
+    try {
+      const clone = el.cloneNode(true) as HTMLElement
+      clone.style.position = 'fixed'
+      clone.style.top = '-9999px'
+      clone.style.left = '0'
+      clone.style.background = '#ffffff'
+      clone.style.overflow = 'visible'
+      const fullWidth = el.scrollWidth
+      clone.style.width = `${fullWidth}px`
+      clone.style.minWidth = `${fullWidth}px`
+      const table = clone.querySelector('table')
+      if (table) {
+        ;(table as HTMLElement).style.width = '100%'
+        ;(table as HTMLElement).style.tableLayout = 'fixed'
+        ;(table as HTMLElement).style.overflow = 'visible'
+      }
+      const header = document.createElement('div')
+      const weekEnd = addDays(weekStart, 6)
+      header.textContent = `${store.name} · ${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}, ${format(weekStart, 'yyyy')}`
+      header.style.cssText = 'font-size: 18px; font-weight: 600; color: #0f172a; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; background: #ffffff;'
+      const wrapper = document.createElement('div')
+      wrapper.style.position = 'fixed'
+      wrapper.style.top = '-9999px'
+      wrapper.style.left = '0'
+      wrapper.style.background = '#ffffff'
+      wrapper.style.overflow = 'visible'
+      wrapper.style.width = `${fullWidth}px`
+      wrapper.appendChild(header)
+      wrapper.appendChild(clone)
+      document.body.appendChild(wrapper)
+      await new Promise((r) => setTimeout(r, 150))
+      const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: fullWidth,
+        windowHeight: wrapper.scrollHeight,
+        logging: false,
+      } as Parameters<typeof html2canvas>[1])
+      document.body.removeChild(wrapper)
+      const safeWeek = `${format(weekStart, 'MMM-d')}-${format(weekStart, 'yyyy')}`.replace(/[^a-zA-Z0-9-]/g, '-')
+      const link = document.createElement('a')
+      link.download = `schedule-${store.name.toLowerCase().replace(/\s+/g, '-')}-${safeWeek}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } finally {
+      setSavingScheduleImage(false)
+    }
+  }
+
   function handleCellClickForCopy(employeeName: string, dayOfWeek: number) {
     if (!copySource) {
       setCopySource({ employeeName, dayOfWeek })
@@ -604,6 +662,14 @@ export function ScheduleGrid({
             )}
           </>
         )}
+        <button
+          type="button"
+          onClick={handleSaveScheduleAsImage}
+          disabled={savingScheduleImage || loading}
+          className="px-4 py-2 text-sm font-medium text-white bg-[#1a2332] hover:bg-slate-700 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-lg disabled:opacity-50 transition-colors"
+        >
+          {savingScheduleImage ? 'Saving…' : 'Save as image (for email)'}
+        </button>
       </div>
 
       {/* Edit hours for this week (override) - only when canEdit */}
