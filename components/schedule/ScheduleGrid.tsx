@@ -87,7 +87,6 @@ export function ScheduleGrid({
     setDailyLy(initialDailyLy ?? [0, 0, 0, 0, 0, 0, 0])
   }, [initialDailyBudget, initialDailyLy])
   const [emailState, setEmailState] = useState<'idle' | 'loading' | 'sent'>('idle')
-  const [savingScheduleImage, setSavingScheduleImage] = useState(false)
   const [employees, setEmployees] = useState<string[]>(initialEmployees)
 
   // When store changes, reset to initial then fetch will repopulate with order + coverage
@@ -364,7 +363,7 @@ export function ScheduleGrid({
   async function handleSaveScheduleAsImage() {
     const el = gridRef.current
     if (!el) return
-    setSavingScheduleImage(true)
+    setEmailState('loading')
     try {
       const clone = el.cloneNode(true) as HTMLElement
       clone.style.position = 'fixed'
@@ -412,8 +411,10 @@ export function ScheduleGrid({
       link.download = `schedule-${store.name.toLowerCase().replace(/\s+/g, '-')}-${safeWeek}.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
-    } finally {
-      setSavingScheduleImage(false)
+      setEmailState('sent')
+      setTimeout(() => setEmailState('idle'), 2000)
+    } catch {
+      setEmailState('idle')
     }
   }
 
@@ -592,7 +593,7 @@ export function ScheduleGrid({
         }}
         canEmail={canEdit}
         emailState={emailState}
-        onEmail={handleSavePdf}
+        onEmail={handleSaveScheduleAsImage}
       />
 
       {/* Weekly budget goals & LY — responsive cards */}
@@ -662,14 +663,6 @@ export function ScheduleGrid({
             )}
           </>
         )}
-        <button
-          type="button"
-          onClick={handleSaveScheduleAsImage}
-          disabled={savingScheduleImage || loading}
-          className="px-4 py-2 text-sm font-medium text-white bg-[#1a2332] hover:bg-slate-700 dark:bg-slate-600 dark:hover:bg-slate-500 rounded-lg disabled:opacity-50 transition-colors"
-        >
-          {savingScheduleImage ? 'Saving…' : 'Save as image (for email)'}
-        </button>
       </div>
 
       {/* Edit hours for this week (override) - only when canEdit */}

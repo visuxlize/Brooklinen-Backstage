@@ -76,7 +76,7 @@ export function WeekNav({
       )}
       {!showDots && <div className="w-4" />}
 
-      {/* Save as PDF */}
+      {/* Save as image (for email) */}
       {canEmail && (
         <button
           onClick={onEmail}
@@ -86,7 +86,7 @@ export function WeekNav({
           {emailState === 'loading' && <Loader2 className="w-4 h-4 animate-spin" />}
           {emailState === 'sent' && <Check className="w-4 h-4 text-green-600 dark:text-green-400" />}
           {emailState === 'idle' && <FileDown className="w-4 h-4" />}
-          {emailState === 'sent' ? 'PDF saved' : 'Save as PDF'}
+          {emailState === 'sent' ? 'Image saved' : 'Save as image (for email)'}
         </button>
       )}
     </div>

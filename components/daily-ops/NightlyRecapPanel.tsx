@@ -12,20 +12,21 @@ import {
 } from '@/lib/daily-ops/formatters'
 import { STORE_CONFIG } from '@/lib/stores'
 import type { DailyOpsActuals } from '@/lib/daily-ops/types'
+import { CleanSelect } from './CleanSelect'
 
 const WEATHER_OPTIONS = [
-  { value: '', label: '— Select —', bg: 'bg-slate-50 dark:bg-slate-800' },
-  { value: 'Sunny', label: 'Sunny', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-  { value: 'Overcast/Cloudy', label: 'Overcast/Cloudy', bg: 'bg-slate-100 dark:bg-slate-700/50' },
-  { value: 'Light/Partial Rain', label: 'Light/Partial Rain', bg: 'bg-sky-50 dark:bg-sky-900/20' },
-  { value: 'Heavy Rain', label: 'Heavy Rain', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-  { value: 'Excessive Heat', label: 'Excessive Heat', bg: 'bg-orange-100 dark:bg-orange-900/30' },
-  { value: 'Light Snow / Freezing Rain', label: 'Light Snow / Freezing Rain', bg: 'bg-cyan-50 dark:bg-cyan-900/20' },
-  { value: 'Heavy Snow / Freezing Rain', label: 'Heavy Snow / Freezing Rain', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
-  { value: 'Excessively Cold', label: 'Excessively Cold', bg: 'bg-violet-50 dark:bg-violet-900/20' },
-] as const
+  { value: '', label: '— Select —' },
+  { value: 'Sunny', label: 'Sunny' },
+  { value: 'Overcast/Cloudy', label: 'Overcast/Cloudy' },
+  { value: 'Light/Partial Rain', label: 'Light/Partial Rain' },
+  { value: 'Heavy Rain', label: 'Heavy Rain' },
+  { value: 'Excessive Heat', label: 'Excessive Heat' },
+  { value: 'Light Snow / Freezing Rain', label: 'Light Snow / Freezing Rain' },
+  { value: 'Heavy Snow / Freezing Rain', label: 'Heavy Snow / Freezing Rain' },
+  { value: 'Excessively Cold', label: 'Excessively Cold' },
+]
 
-const IN_STORE_EVENT_OPTIONS = [
+const IN_STORE_OPTIONS = [
   { value: '', label: '— Select —' },
   { value: 'No', label: 'No' },
   { value: 'Yes', label: 'Yes' },
@@ -128,7 +129,7 @@ export function NightlyRecapPanel() {
   }
 
   const storeName = STORE_CONFIG.find((s) => String(s.id) === selectedStore)?.name ?? selectedStore
-  const weatherBg = WEATHER_OPTIONS.find((o) => o.value === recapWeather)?.bg ?? 'bg-slate-50 dark:bg-slate-800'
+  const formattedDate = formatRecapDate(selectedDate)
   const recapRef = useRef<HTMLDivElement>(null)
   const [savingImage, setSavingImage] = useState(false)
 
@@ -138,85 +139,91 @@ export function NightlyRecapPanel() {
     setSavingImage(true)
     try {
       const clone = el.cloneNode(true) as HTMLElement
-      clone.style.position = 'fixed'
-      clone.style.top = '-9999px'
-      clone.style.left = '0'
-      clone.style.width = `${el.offsetWidth}px`
-      clone.style.minWidth = `${el.offsetWidth}px`
-      clone.style.maxWidth = `${el.offsetWidth}px`
-      clone.style.background = '#ffffff'
-      clone.style.overflowX = 'hidden'
-      clone.style.overflowY = 'visible'
+      clone.style.cssText = `
+        position: fixed;
+        top: -9999px;
+        left: 0;
+        width: ${el.offsetWidth}px;
+        background: #ffffff;
+        overflow: visible;
+      `
       document.body.appendChild(clone)
 
-      const getStyle = (node: Element) => getComputedStyle(node)
-
-      clone.querySelectorAll('select').forEach((sel) => {
-        const opt = sel.options[sel.selectedIndex]
-        const val = opt?.text ?? (sel as HTMLSelectElement).value ?? '—'
-        const div = document.createElement('div')
-        div.textContent = val
-        div.style.cssText = `
-          font-size: ${getStyle(sel).fontSize};
-          font-family: ${getStyle(sel).fontFamily};
+      clone.querySelectorAll('.clean-select-trigger').forEach((btn) => {
+        const span = document.createElement('span')
+        span.textContent = (btn.textContent ?? '').replace(/[\u2039\u203A▼▲⌄]/g, '').trim()
+        span.style.cssText = `
+          font-size: 0.95rem;
+          font-weight: 500;
           color: #1a2332;
-          padding: 8px 12px;
-          border: 1px solid #d1d5db;
-          border-radius: 6px;
-          background: #f9fafb;
-          width: ${(sel as HTMLElement).offsetWidth}px;
-          box-sizing: border-box;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          font-family: inherit;
         `
-        sel.parentNode?.replaceChild(div, sel)
+        btn.parentNode?.replaceChild(span, btn)
       })
 
-      clone.querySelectorAll('textarea, input[type="text"], input[type="number"]').forEach((inp) => {
-        const el = inp as HTMLTextAreaElement | HTMLInputElement
-        const val = el.value ?? ''
+      clone.querySelectorAll('.actual-sales-row input').forEach((inp) => {
+        const input = inp as HTMLInputElement
+        const rawVal = input.value
+        const parent = input.parentNode as HTMLElement
+        const isCurrency = parent?.querySelector('.input-prefix')
+        const displayText = rawVal ? (isCurrency ? `$${rawVal}` : rawVal) : '—'
+        const span = document.createElement('span')
+        span.textContent = displayText
+        span.style.cssText = `
+          font-size: inherit;
+          color: ${rawVal ? '#1a2332' : '#c5cdd8'};
+          font-weight: 400;
+          font-family: inherit;
+        `
+        if (parent && (parent.classList.contains('flex') || parent.querySelector('.input-prefix'))) {
+          parent.textContent = ''
+          parent.appendChild(span)
+        } else {
+          input.parentNode?.replaceChild(span, input)
+        }
+      })
+
+      clone.querySelectorAll('.recap-narrative-section').forEach((section) => {
+        const ta = section.querySelector('textarea')
+        if (!ta) return
+        if (!(ta as HTMLTextAreaElement).value.trim()) {
+          ;(section as HTMLElement).style.display = 'none'
+          return
+        }
         const div = document.createElement('div')
-        div.textContent = val || ' '
+        div.textContent = (ta as HTMLTextAreaElement).value
         div.style.cssText = `
-          font-size: ${getStyle(el).fontSize};
-          font-family: ${getStyle(el).fontFamily};
-          color: #1a2332;
-          padding: 8px 12px;
-          border: 1px solid #d1d5db;
-          border-radius: 6px;
-          background: #ffffff;
-          width: 100%;
-          box-sizing: border-box;
-          min-height: ${el.tagName === 'TEXTAREA' ? `${Math.max((el as HTMLTextAreaElement).scrollHeight, 60)}px` : 'auto'};
-          word-wrap: break-word;
           white-space: pre-wrap;
+          word-wrap: break-word;
+          font-size: 0.95rem;
+          line-height: 1.7;
+          color: #1a2332;
+          padding: 12px 0 12px 14px;
+          border-left: 3px solid #2563eb;
+          font-family: inherit;
         `
-        el.parentNode?.replaceChild(div, el)
+        ta.parentNode?.replaceChild(div, ta)
       })
 
-      await new Promise((r) => setTimeout(r, 100))
+      await new Promise((r) => setTimeout(r, 120))
 
-      const w = clone.scrollWidth
-      const h = clone.scrollHeight
       const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
-        allowTaint: false,
         backgroundColor: '#ffffff',
         scrollX: 0,
         scrollY: 0,
-        windowWidth: w,
-        windowHeight: h,
-        width: w,
-        height: h,
+        windowWidth: clone.offsetWidth,
+        windowHeight: clone.scrollHeight,
         logging: false,
       } as Parameters<typeof html2canvas>[1])
 
       document.body.removeChild(clone)
 
+      const safeName = storeName.toLowerCase().replace(/\s+/g, '-')
+      const safeDate = selectedDate.replace(/\s+/g, '-').toLowerCase()
       const link = document.createElement('a')
-      link.download = `nightly-recap-${selectedStore}-${selectedDate}.png`
+      link.download = `nightly-recap-${safeName}-${safeDate}.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
     } finally {
@@ -236,49 +243,47 @@ export function NightlyRecapPanel() {
           {savingImage ? 'Saving…' : 'Save as image (for email)'}
         </button>
       </div>
-      <div ref={recapRef} className="space-y-6 overflow-x-auto overflow-y-visible bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-600">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-4 text-center sm:text-left">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Store</p>
-          <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{storeName}</p>
+      <div ref={recapRef} className="space-y-6 overflow-x-auto overflow-y-visible bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-600">
+      {/* Header — 3-column layout */}
+      <div
+        className="flex flex-col sm:flex-row items-start justify-between gap-6 border-b border-[#f0f1f3]"
+        style={{ padding: '28px 36px 24px' }}
+      >
+        <div className="flex flex-col gap-1 flex-1">
+          <span className="text-[0.68rem] font-bold tracking-[0.1em] text-[#8a94a6] uppercase">Store</span>
+          <h1 className="text-[1.85rem] font-bold text-[#1a2332] leading-tight m-0" style={{ lineHeight: 1.15 }}>{storeName}</h1>
+          <p className="text-base text-[#4b5563] font-normal mt-1 mb-0">{formattedDate}</p>
         </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Date</p>
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{formatRecapDate(selectedDate)}</p>
+        <div className="flex flex-col items-center justify-center flex-1 text-center py-1.5">
+          <h2 className="text-[1.35rem] font-bold text-[#1a2332] m-0 leading-tight tracking-tight">Nightly Recap</h2>
+          <p className="text-[1.35rem] font-bold text-[#1a2332] m-0 leading-tight tracking-tight">Report</p>
         </div>
-        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Weather</label>
-            <select
+        <div className="flex flex-col items-end gap-4 flex-1">
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-[0.68rem] font-bold tracking-[0.08em] text-[#8a94a6] uppercase">☁ Weather</span>
+            <CleanSelect
               value={recapWeather}
-              onChange={(e) => setRecapWeather(e.target.value)}
-              className={`px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg min-w-[180px] ${weatherBg} text-slate-900 dark:text-slate-100`}
-            >
-              {WEATHER_OPTIONS.map((o) => (
-                <option key={o.value || 'blank'} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              onChange={setRecapWeather}
+              options={WEATHER_OPTIONS}
+              placeholder="— Select —"
+              alignRight
+            />
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">In-Store Event</label>
-            <select
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-[0.68rem] font-bold tracking-[0.08em] text-[#8a94a6] uppercase">In-Store Event</span>
+            <CleanSelect
               value={recapInStoreEvent}
-              onChange={(e) => setRecapInStoreEvent(e.target.value)}
-              className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 min-w-[120px]"
-            >
-              {IN_STORE_EVENT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              onChange={setRecapInStoreEvent}
+              options={IN_STORE_OPTIONS}
+              placeholder="— Select —"
+              alignRight
+            />
           </div>
         </div>
       </div>
 
-      <table className="w-full border-collapse text-sm">
+      <div className="px-6 pt-4 pb-6">
+      <table className="metrics-table w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-slate-200 dark:border-slate-600">
             <th className="text-left py-2 pr-4 text-slate-500 dark:text-slate-400 font-medium min-w-[8rem]"></th>
@@ -312,22 +317,24 @@ export function NightlyRecapPanel() {
               )
             })}
           </tr>
-          <tr className="border-b border-slate-200 dark:border-slate-600">
+          <tr className="actual-sales-row border-b border-slate-200 dark:border-slate-600">
             <td className="py-2 pr-4 font-medium text-slate-600 dark:text-slate-300">Actual Sales</td>
             {COLS.map((c) => {
               const isComputed = c.key === 'aov' || c.key === 'cvr'
               const isCurrency = c.key === 'netRevenue' || c.key === 'returns'
               const val = actualDisplay[c.key as keyof typeof actualDisplay] ?? null
+              const currencyVal = c.key === 'netRevenue' ? actuals.netRevenue : actuals.returns
+              const hasCurrencyValue = currencyVal != null && currencyVal !== ''
               return (
                 <td key={c.key} className="text-center py-1 px-2">
                   {isComputed ? (
                     <span className="text-slate-700 dark:text-slate-200">{formatVal(c.key, val)}</span>
                   ) : isCurrency ? (
                     <div className="flex items-center justify-center gap-0.5">
-                      <span className="text-slate-500 dark:text-slate-400 text-sm shrink-0">$</span>
+                      <span className={`input-prefix shrink-0 text-sm transition-colors ${hasCurrencyValue ? 'text-[#1a2332]' : 'text-[#9ca3af]'}`}>$</span>
                       <input
                         type="number"
-                        step={c.key === 'netRevenue' ? 1 : 1}
+                        step={1}
                         min={0}
                         placeholder={c.key === 'returns' ? '0' : '—'}
                         value={(c.key === 'netRevenue' ? actuals.netRevenue : actuals.returns) ?? ''}
@@ -340,7 +347,7 @@ export function NightlyRecapPanel() {
                           const n = Number(raw)
                           if (!Number.isNaN(n)) setActual(c.key as 'netRevenue' | 'returns', n)
                         }}
-                        className="w-full min-w-[4rem] max-w-[100px] px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                        className="actual-sales-input w-full min-w-[4rem] max-w-[100px] bg-transparent border-0 border-b-[1.5px] border-transparent rounded-none outline-none shadow-none py-1 px-0.5 text-center text-inherit text-[#1a2332] font-normal transition-[border-color] hover:border-[#d1d5db] focus:border-[#2563eb] focus:bg-transparent focus:outline-none focus:shadow-none appearance-none"
                       />
                     </div>
                   ) : (
@@ -358,7 +365,7 @@ export function NightlyRecapPanel() {
                         const n = Number(raw)
                         if (!Number.isNaN(n) && c.key !== 'aov' && c.key !== 'cvr') setActual(c.key as keyof DailyOpsActuals, n)
                       }}
-                      className="w-full min-w-[3rem] max-w-[120px] mx-auto px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                      className="actual-sales-input w-full min-w-[3rem] max-w-[120px] mx-auto bg-transparent border-0 border-b-[1.5px] border-transparent rounded-none outline-none shadow-none py-1 px-0.5 text-center text-inherit text-[#1a2332] font-normal transition-[border-color] hover:border-[#d1d5db] focus:border-[#2563eb] focus:bg-transparent focus:outline-none focus:shadow-none appearance-none"
                     />
                   )}
                 </td>
@@ -386,7 +393,7 @@ export function NightlyRecapPanel() {
       </p>
 
       <div className="space-y-4">
-        <section>
+        <section className="recap-narrative-section">
           <h4 className="text-sm font-semibold bg-slate-700 dark:bg-slate-600 text-white px-3 py-2 rounded-t">
             Overall Sales
           </h4>
@@ -398,10 +405,10 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('overallSales', e.target.value)}
             placeholder="e.g. Slow day due to internet outages..."
             rows={4}
-            className="w-full min-h-[100px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
+            className="recap-narrative-textarea w-full bg-transparent border-0 border-l-[3px] border-transparent rounded-none outline-none resize-y min-h-[88px] py-3 pl-3.5 pr-0 text-[0.95rem] leading-[1.7] text-[#1a2332] box-border transition-[border-color] hover:border-l-[#e2e5ea] focus:border-l-[#2563eb] placeholder:text-[#b8bfca] placeholder:italic placeholder:font-light"
           />
         </section>
-        <section>
+        <section className="recap-narrative-section">
           <h4 className="text-sm font-semibold bg-slate-700 dark:bg-slate-600 text-white px-3 py-2 rounded-t">
             Traffic
           </h4>
@@ -413,10 +420,10 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('traffic', e.target.value)}
             placeholder="e.g. Traffic mainly for TOs and walk-ins..."
             rows={3}
-            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
+            className="recap-narrative-textarea w-full bg-transparent border-0 border-l-[3px] border-transparent rounded-none outline-none resize-y min-h-[88px] py-3 pl-3.5 pr-0 text-[0.95rem] leading-[1.7] text-[#1a2332] box-border transition-[border-color] hover:border-l-[#e2e5ea] focus:border-l-[#2563eb] placeholder:text-[#b8bfca] placeholder:italic placeholder:font-light"
           />
         </section>
-        <section>
+        <section className="recap-narrative-section">
           <h4 className="text-sm font-semibold bg-slate-700 dark:bg-slate-600 text-white px-3 py-2 rounded-t">
             Conversion
           </h4>
@@ -428,10 +435,10 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('conversion', e.target.value)}
             placeholder="..."
             rows={3}
-            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
+            className="recap-narrative-textarea w-full bg-transparent border-0 border-l-[3px] border-transparent rounded-none outline-none resize-y min-h-[88px] py-3 pl-3.5 pr-0 text-[0.95rem] leading-[1.7] text-[#1a2332] box-border transition-[border-color] hover:border-l-[#e2e5ea] focus:border-l-[#2563eb] placeholder:text-[#b8bfca] placeholder:italic placeholder:font-light"
           />
         </section>
-        <section>
+        <section className="recap-narrative-section">
           <h4 className="text-sm font-semibold bg-slate-700 dark:bg-slate-600 text-white px-3 py-2 rounded-t">
             Promotion / Product Newness Performance
           </h4>
@@ -443,10 +450,10 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('promotionPerformance', e.target.value)}
             placeholder="..."
             rows={3}
-            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
+            className="recap-narrative-textarea w-full bg-transparent border-0 border-l-[3px] border-transparent rounded-none outline-none resize-y min-h-[88px] py-3 pl-3.5 pr-0 text-[0.95rem] leading-[1.7] text-[#1a2332] box-border transition-[border-color] hover:border-l-[#e2e5ea] focus:border-l-[#2563eb] placeholder:text-[#b8bfca] placeholder:italic placeholder:font-light"
           />
         </section>
-        <section>
+        <section className="recap-narrative-section">
           <h4 className="text-sm font-semibold bg-slate-700 dark:bg-slate-600 text-white px-3 py-2 rounded-t">
             Retail Operations / Inventory Alerts
           </h4>
@@ -458,10 +465,10 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('retailOpsAlerts', e.target.value)}
             placeholder="..."
             rows={3}
-            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
+            className="recap-narrative-textarea w-full bg-transparent border-0 border-l-[3px] border-transparent rounded-none outline-none resize-y min-h-[88px] py-3 pl-3.5 pr-0 text-[0.95rem] leading-[1.7] text-[#1a2332] box-border transition-[border-color] hover:border-l-[#e2e5ea] focus:border-l-[#2563eb] placeholder:text-[#b8bfca] placeholder:italic placeholder:font-light"
           />
         </section>
-        <section>
+        <section className="recap-narrative-section">
           <h4 className="text-sm font-semibold bg-slate-700 dark:bg-slate-600 text-white px-3 py-2 rounded-t">
             Store Closing Notes
           </h4>
@@ -473,9 +480,10 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('storeClosingNotes', e.target.value)}
             placeholder="..."
             rows={3}
-            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
+            className="recap-narrative-textarea w-full bg-transparent border-0 border-l-[3px] border-transparent rounded-none outline-none resize-y min-h-[88px] py-3 pl-3.5 pr-0 text-[0.95rem] leading-[1.7] text-[#1a2332] box-border transition-[border-color] hover:border-l-[#e2e5ea] focus:border-l-[#2563eb] placeholder:text-[#b8bfca] placeholder:italic placeholder:font-light"
           />
         </section>
+      </div>
       </div>
       </div>
     </div>
