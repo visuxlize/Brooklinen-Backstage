@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { scheduleWeekMeta } from '@/lib/db/schema'
+import { scheduleWeekMeta, stores } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isStoreLeader, isFullControl } from '@/lib/roles'
@@ -81,6 +81,11 @@ export async function PUT(request: Request) {
     const nextPromotions = promotions !== undefined ? { ...basePromotions, ...promotions } : basePromotions
     const nextHoursOverride = hoursOverride !== undefined ? hoursOverride : (existing?.hoursOverride ?? null)
     const nextEmployeeOrder = employeeOrder !== undefined ? employeeOrder : (existing?.employeeOrder as string[] | null) ?? null
+
+    // Persist employee order at store level so it applies to all weeks
+    if (employeeOrder !== undefined) {
+      await db.update(stores).set({ employeeOrder: employeeOrder as object | null }).where(eq(stores.id, storeId))
+    }
 
     await db
       .insert(scheduleWeekMeta)

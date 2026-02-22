@@ -173,6 +173,12 @@ export async function GET(request: Request) {
     .where(and(eq(scheduleWeekMeta.storeId, storeId), eq(scheduleWeekMeta.weekStart, weekStart)))
     .limit(1)
 
+  const [storeRow] = await db
+    .select({ employeeOrder: stores.employeeOrder })
+    .from(stores)
+    .where(eq(stores.id, storeId))
+    .limit(1)
+
   // People from this store covering at another store (show store name in cell on home schedule)
   const coverageAwayRows = await db
     .select({
@@ -200,7 +206,8 @@ export async function GET(request: Request) {
     workload: weekMetaRow?.workload ?? null,
     promotions: weekMetaRow?.promotions ?? null,
     hoursOverride: weekMetaRow?.hoursOverride ?? null,
-    employeeOrder: (weekMetaRow?.employeeOrder as string[] | null) ?? null,
+    // Store-level order applies to all weeks; fall back to per-week meta for legacy data
+    employeeOrder: (storeRow?.employeeOrder as string[] | null) ?? (weekMetaRow?.employeeOrder as string[] | null) ?? null,
   }
 
   return NextResponse.json({

@@ -7,6 +7,8 @@ export const stores = pgTable('stores', {
   city: text('city').notNull(),
   color: text('color').notNull(),
   hours: jsonb('hours').notNull(),
+  /** Canonical employee row order for the schedule; applies to all weeks until changed. */
+  employeeOrder: jsonb('employee_order'),
 })
 
 export const users = pgTable('users', {

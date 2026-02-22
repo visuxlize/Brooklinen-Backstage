@@ -154,10 +154,20 @@ function storeMatchesExcelName(store: StoreConfig, excelStoreName: string): bool
   return false
 }
 
+/** Match "Last 5 Weeks Traffic Trends" or "Last 5Weeks Traffic trend" (Williamsburg-style). */
+function isTrendSheetName(name: string): boolean {
+  return /last\s*5\s*weeks?\s*traffic\s*trends?/i.test(name)
+}
+
+/** Match "Historical Week Data" or "Historical of 53Week Data - Last 53weeks" (Williamsburg-style). */
+function isHistSheetName(name: string): boolean {
+  return /historical.*week.*data/i.test(name) || /\d+\s*week.*data/i.test(name)
+}
+
 /**
- * Parse "Retail Traffic Data Pulls_WB.xlsx" format:
- * - "Last 5 Weeks Traffic Trends": Store Name, Traffic Count, Recent Trend Multiplier (row per store).
- * - "Historical Week Data - Last Com": Store, Start of Week (Excel serial), Hour..., Sun–Sat (cols 4–10). Aggregate by week.
+ * Parse "Retail Traffic Data Pulls" format (WB or Williamsburg):
+ * - Trend sheet: Store Name, Traffic Count, Recent Trend Multiplier (row per store). Columns detected by header.
+ * - Historical sheet: Store, Week (Excel serial or date), then Sun–Sat. Columns detected by header.
  */
 function parseRetailTrafficWorkbook(
   wb: { SheetNames: string[]; Sheets: Record<string, unknown> },
@@ -166,20 +176,27 @@ function parseRetailTrafficWorkbook(
 ): { weeks: ExtractedWeek[]; trendCount?: number; trendMult?: number } {
   const result: { weeks: ExtractedWeek[]; trendCount?: number; trendMult?: number } = { weeks: [] }
 
-  const trendSheetName = wb.SheetNames.find((n) => /last\s*5\s*weeks\s*traffic\s*trends/i.test(n))
-  const histSheetName = wb.SheetNames.find((n) => /historical\s*week\s*data/i.test(n))
+  const trendSheetName = wb.SheetNames.find(isTrendSheetName)
+  const histSheetName = wb.SheetNames.find(isHistSheetName)
 
   if (trendSheetName) {
     const sheet = wb.Sheets[trendSheetName]
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as (string | number)[][]
-    for (let i = 2; i < rows.length; i++) {
+    const header = (rows[0] ?? []).map((c) => String(c ?? '').toLowerCase())
+    const storeCol = header.findIndex((h) => /store|name|location/i.test(h))
+    const countCol = header.findIndex((h) => /traffic|count/i.test(h))
+    const trendCol = header.findIndex((h) => /trend|mult/i.test(h))
+    const dataStart = header.some((h) => /store|name|traffic|count|trend/i.test(h)) ? 1 : 2
+    for (let i = dataStart; i < rows.length; i++) {
       const row = rows[i] ?? []
-      const excelStore = row[0] != null ? String(row[0]).trim() : ''
+      const excelStore = (storeCol >= 0 && row[storeCol] != null ? String(row[storeCol]).trim() : String(row[0] ?? '').trim())
       if (!storeMatchesExcelName(store, excelStore)) continue
-      const trafficCount = row[1] != null && row[1] !== '' ? Math.round(Number(row[1])) : undefined
-      const trendMult = row[2] != null && row[2] !== '' ? Number(row[2]) : undefined
+      const countVal = countCol >= 0 ? row[countCol] : row[1]
+      const trendValRaw = trendCol >= 0 ? row[trendCol] : row[2]
+      const trafficCount = countVal != null && countVal !== '' ? Math.round(Number(countVal)) : undefined
+      const trendVal = trendValRaw != null && trendValRaw !== '' ? Number(trendValRaw) : undefined
       if (trafficCount != null && !Number.isNaN(trafficCount)) result.trendCount = trafficCount
-      if (trendMult != null && !Number.isNaN(trendMult)) result.trendMult = trendMult
+      if (trendVal != null && !Number.isNaN(trendVal)) result.trendMult = trendVal
       break
     }
   }
@@ -187,21 +204,37 @@ function parseRetailTrafficWorkbook(
   if (histSheetName) {
     const sheet = wb.Sheets[histSheetName]
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as (string | number)[][]
-    const byWeek = new Map<number, number[]>()
-    for (let i = 2; i < rows.length; i++) {
+    const header = (rows[0] ?? []).map((c) => String(c ?? '').toLowerCase())
+    const storeCol = header.findIndex((h) => /store|name|location/i.test(h))
+    const weekCol = header.findIndex((h) => /week|date|start/i.test(h))
+    const dayCols = DAY_HEADERS_LOWER.map((d) => header.findIndex((h) => h.includes(d.slice(0, 3)) || d.startsWith(h.slice(0, 2))))
+    const hasAllDays = dayCols.every((c) => c >= 0)
+    const dataStart = header.some((h) => /store|week|sun|mon/i.test(h)) ? 1 : 2
+    const useStoreCol = storeCol >= 0 ? storeCol : 0
+    const useWeekCol = weekCol >= 0 ? weekCol : 1
+    const useDayCols = hasAllDays ? dayCols : [4, 5, 6, 7, 8, 9, 10]
+
+    const byWeek = new Map<string, number[]>()
+    for (let i = dataStart; i < rows.length; i++) {
       const row = rows[i] ?? []
-      const excelStore = row[0] != null ? String(row[0]).trim() : ''
+      const excelStore = (row[useStoreCol] != null ? String(row[useStoreCol]).trim() : '')
       if (!storeMatchesExcelName(store, excelStore)) continue
-      const weekSerial = row[1] != null ? Number(row[1]) : NaN
-      if (Number.isNaN(weekSerial)) continue
-      const sun = Math.round(Number(row[4] ?? 0) || 0)
-      const mon = Math.round(Number(row[5] ?? 0) || 0)
-      const tue = Math.round(Number(row[6] ?? 0) || 0)
-      const wed = Math.round(Number(row[7] ?? 0) || 0)
-      const thu = Math.round(Number(row[8] ?? 0) || 0)
-      const fri = Math.round(Number(row[9] ?? 0) || 0)
-      const sat = Math.round(Number(row[10] ?? 0) || 0)
-      const existing = byWeek.get(weekSerial) ?? [0, 0, 0, 0, 0, 0, 0]
+      const weekVal = row[useWeekCol]
+      let weekStart: string | null = null
+      if (typeof weekVal === 'number' && !Number.isNaN(weekVal)) weekStart = excelSerialToWeekStart(weekVal)
+      else if (typeof weekVal === 'string') {
+        const parsed = parseDateString(String(weekVal).trim().slice(0, 30))
+        weekStart = parsed ? getWeekStartSunday(parsed) : null
+      }
+      if (!weekStart) continue
+      const sun = Math.round(Number(row[useDayCols[0]] ?? 0) || 0)
+      const mon = Math.round(Number(row[useDayCols[1]] ?? 0) || 0)
+      const tue = Math.round(Number(row[useDayCols[2]] ?? 0) || 0)
+      const wed = Math.round(Number(row[useDayCols[3]] ?? 0) || 0)
+      const thu = Math.round(Number(row[useDayCols[4]] ?? 0) || 0)
+      const fri = Math.round(Number(row[useDayCols[5]] ?? 0) || 0)
+      const sat = Math.round(Number(row[useDayCols[6]] ?? 0) || 0)
+      const existing = byWeek.get(weekStart) ?? [0, 0, 0, 0, 0, 0, 0]
       existing[0] += sun
       existing[1] += mon
       existing[2] += tue
@@ -209,13 +242,11 @@ function parseRetailTrafficWorkbook(
       existing[4] += thu
       existing[5] += fri
       existing[6] += sat
-      byWeek.set(weekSerial, existing)
+      byWeek.set(weekStart, existing)
     }
-    const weekStarts = [...byWeek.keys()].sort((a, b) => b - a)
-    for (const serial of weekStarts) {
-      const weekStart = excelSerialToWeekStart(serial)
-      if (!weekStart) continue
-      const days = byWeek.get(serial) ?? [0, 0, 0, 0, 0, 0, 0]
+    const weekStarts = [...byWeek.keys()].sort((a, b) => b.localeCompare(a))
+    for (const weekStart of weekStarts) {
+      const days = byWeek.get(weekStart) ?? [0, 0, 0, 0, 0, 0, 0]
       const [sun, mon, tue, wed, thu, fri, sat] = days
       const total = sun + mon + tue + wed + thu + fri + sat
       const week: ExtractedWeek = { sun, mon, tue, wed, thu, fri, sat, total, weekStart }
@@ -379,15 +410,13 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
       const ab = await file.arrayBuffer()
       const wb = XLSX.read(ab, { type: 'array' })
 
-      const trendFound = wb.SheetNames.some((n) => /last\s*5\s*weeks\s*traffic\s*trends/i.test(n))
-      const histFound = wb.SheetNames.some((n) => /historical\s*week\s*data/i.test(n))
-      if (trendFound && histFound) {
-        type XLSXUtils = { utils: { sheet_to_json: (sheet: unknown, opts: { header: number; defval: string }) => (string | number)[][] } }
-        const parsed = parseRetailTrafficWorkbook(wb, store, XLSX as XLSXUtils)
-        if (parsed.weeks.length > 0) {
-          setExcelWeeks(parsed.weeks)
-          return
-        }
+      const trendFound = wb.SheetNames.some(isTrendSheetName)
+      const histFound = wb.SheetNames.some(isHistSheetName)
+      type XLSXUtils = { utils: { sheet_to_json: (sheet: unknown, opts: { header: number; defval: string }) => (string | number)[][] } }
+      const parsed = (trendFound || histFound) ? parseRetailTrafficWorkbook(wb, store, XLSX as XLSXUtils) : { weeks: [] }
+      if (parsed.weeks.length > 0) {
+        setExcelWeeks(parsed.weeks)
+        return
       }
 
       const allWeeks: ExtractedWeek[] = []
@@ -400,8 +429,14 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
           allWeeks.push(row)
         }
       }
+      if (allWeeks.length > 0 && (parsed.trendCount != null || parsed.trendMult != null)) {
+        const first = { ...allWeeks[0] }
+        if (parsed.trendCount != null) first.trafficCount = parsed.trendCount
+        if (parsed.trendMult != null) first.trendMult = String(parsed.trendMult)
+        allWeeks[0] = first
+      }
       setExcelWeeks(allWeeks)
-      if (allWeeks.length === 0) setExcelError('No valid week rows found. Use Retail Traffic Data Pulls_WB.xlsx format or sheets with Sun–Sat columns.')
+      if (allWeeks.length === 0) setExcelError('No valid week rows found. Use Retail Traffic Data Pulls format with "Last 5 Weeks Traffic Trends" and "Historical Week Data" (or sheets with Sun–Sat columns).')
     } catch (err) {
       setExcelError(err instanceof Error ? err.message : 'Failed to read Excel file.')
     }
@@ -534,7 +569,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-5">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Upload Excel</h2>
           <p className="text-xs text-slate-400 dark:text-slate-400 mb-3">
-            <strong>Retail Traffic Data Pulls_WB.xlsx</strong> is read automatically: <em>Last 5 Weeks Traffic Trends</em> (traffic count + trend for this store) and <em>Historical Week Data - Last Com</em> (53 weeks). Data applies to the store you’re viewing and updates the daily breakdown, KPI cards, 53-week history, and 5-week projection.
+            Use <strong>Retail Traffic Data Pulls</strong> (e.g. <em>Retail Traffic Data Pulls_Williamsburg.xlsx</em> or <em>_WB.xlsx</em>): <em>Last 5 Weeks Traffic Trends</em> (traffic count + trend) and <em>Historical Week Data</em> / <em>53 Week Data</em>. Data applies to the store you’re viewing and updates the daily breakdown, KPI cards, 53-week history, and 5-week projection.
           </p>
           <input
             ref={fileInputRef}
