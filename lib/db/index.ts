@@ -3,70 +3,31 @@ import postgres from 'postgres'
 import * as schema from './schema'
 
 /**
- * Database Connection
- * 
- * This creates a connection to your PostgreSQL database using Drizzle ORM.
- * The connection is configured for serverless environments (Vercel, etc.)
- * 
- * Why Drizzle?
- * - Type-safe queries (catch errors at compile time)
- * - Better performance than ORMs like Prisma
- * - Flexible and SQL-like syntax
- * - Great developer experience
- * 
- * Example usage:
- * ```typescript
- * import { db } from '@/lib/db'
- * import { users } from '@/lib/db/schema'
- * import { eq } from 'drizzle-orm'
- * 
- * // Select all users
- * const allUsers = await db.select().from(users)
- * 
- * // Select with conditions
- * const activeUsers = await db
- *   .select()
- *   .from(users)
- *   .where(eq(users.isActive, true))
- * 
- * // Insert a user
- * const newUser = await db
- *   .insert(users)
- *   .values({ email: 'test@example.com' })
- *   .returning()
- * 
- * // Update a user
- * await db
- *   .update(users)
- *   .set({ fullName: 'New Name' })
- *   .where(eq(users.id, userId))
- * 
- * // Delete a user
- * await db
- *   .delete(users)
- *   .where(eq(users.id, userId))
- * ```
+ * Database Connection (lazy-initialized so missing DATABASE_URL doesn't crash at import time).
+ * Configured for serverless (Vercel). Use Transaction mode pooler (port 6543) when using Supabase.
  */
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is not set')
+let _client: ReturnType<typeof postgres> | null = null
+let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
+
+function getDb(): ReturnType<typeof drizzle<typeof schema>> {
+  if (_db) return _db
+  const dbUrl = process.env.DATABASE_URL
+  if (!dbUrl) {
+    throw new Error('DATABASE_URL environment variable is not set')
+  }
+  _client = postgres(dbUrl, {
+    prepare: false,
+    max: 1,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  })
+  _db = drizzle(_client, { schema })
+  return _db
 }
 
-// Supabase: use Transaction mode pooler (port 6543) to avoid "MaxClientsInSessionMode" errors.
-// In Dashboard: Project Settings → Database → Connection string → "Transaction" (not Session).
-// Session mode (port 5432) has a low connection limit; transaction mode multiplexes connections.
-const dbUrl = process.env.DATABASE_URL
-
-// Create PostgreSQL connection
-// prepare: false for serverless; max: 1 to avoid exhausting pool when using session mode
-const client = postgres(dbUrl, {
-  prepare: false,
-  max: 1,
-  idle_timeout: 20,
-  connect_timeout: 10,
+export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+  get(_, prop) {
+    return (getDb() as Record<string | symbol, unknown>)[prop]
+  },
 })
-
-// Create Drizzle instance with schema
-// If you see "MaxClientsInSessionMode: max clients reached", switch DATABASE_URL to pooler:6543
-// The schema is imported so Drizzle knows about your tables and relationships
-export const db = drizzle(client, { schema })
