@@ -9,48 +9,104 @@ const MONTHS: Record<string, number> = {
   oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
 }
 
+function parseMonth(s: string): number | undefined {
+  const lower = s.toLowerCase().trim()
+  return MONTHS[lower] ?? MONTHS[lower.slice(0, 3)]
+}
+
 /**
- * Parse "Mar 15" or "Mar 22-23" / "Mar 22–23" into date strings (YYYY-MM-DD) and week info.
+ * Parse one segment like "March 8 - 14th", "March 8 - March 15", "March 1", or "March 6-8"
+ * into an array of Date objects (inclusive range).
+ */
+function parseOneSegment(
+  segment: string,
+  referenceYear: number
+): Date[] {
+  const raw = segment.trim().replace(/\b(st|nd|rd|th)\b/gi, '').trim() // strip ordinals
+  if (!raw) return []
+
+  // 1) "Month Day - Month Day" (e.g. March 8 - March 15, March 8 – April 2)
+  const twoDateMatch = raw.match(/^([a-zA-Z]+)\s+(\d+)\s*[-–—to]+\s*([a-zA-Z]+)\s+(\d+)/i)
+  if (twoDateMatch) {
+    const month1 = parseMonth(twoDateMatch[1])
+    const month2 = parseMonth(twoDateMatch[3])
+    if (month1 !== undefined && month2 !== undefined) {
+      let d1 = new Date(referenceYear, month1, parseInt(twoDateMatch[2], 10))
+      let d2 = new Date(referenceYear, month2, parseInt(twoDateMatch[4], 10))
+      if (d2 < d1) d2 = new Date(referenceYear + 1, month2, parseInt(twoDateMatch[4], 10))
+      if (!Number.isNaN(d1.getTime()) && !Number.isNaN(d2.getTime()) && d1 <= d2) {
+        const dates: Date[] = []
+        for (let d = new Date(d1); d <= d2; d.setDate(d.getDate() + 1)) dates.push(new Date(d))
+        return dates
+      }
+    }
+  }
+
+  // 2) "Month Day - Day" same month (e.g. March 8 - 14, March 8 - 14th, March 6-8)
+  const rangeMatch = raw.match(/^([a-zA-Z]+)\s+(\d+)\s*[-–—to]+\s*(\d+)/i)
+  if (rangeMatch) {
+    const month = parseMonth(rangeMatch[1])
+    if (month !== undefined) {
+      const day1 = parseInt(rangeMatch[2], 10)
+      const day2 = parseInt(rangeMatch[3], 10)
+      const d1 = new Date(referenceYear, month, day1)
+      const d2 = new Date(referenceYear, month, day2)
+      if (!Number.isNaN(d1.getTime()) && !Number.isNaN(d2.getTime()) && d1 <= d2) {
+        const dates: Date[] = []
+        for (let d = new Date(d1); d <= d2; d.setDate(d.getDate() + 1)) dates.push(new Date(d))
+        return dates
+      }
+    }
+  }
+
+  // 3) Single day: "March 1", "March 1st", "Mar 1"
+  const singleMatch = raw.match(/^([a-zA-Z]+)\s+(\d+)/i)
+  if (singleMatch) {
+    const month = parseMonth(singleMatch[1])
+    if (month !== undefined) {
+      const d = new Date(referenceYear, month, parseInt(singleMatch[2], 10))
+      if (!Number.isNaN(d.getTime())) return [d]
+    }
+  }
+
+  return []
+}
+
+/**
+ * Parse requested days text into date strings and week info.
+ * Handles: "March 8 - 14th", "March 8 - March 15", "March 1", "March 6-8", and comma-separated (e.g. "March 1, March 6-8").
  * Uses current year when year is not given.
  */
 export function parseRequestedDays(
   requestedDays: string,
   referenceYear: number = new Date().getFullYear()
 ): { dateStr: string; weekStart: string; dayOfWeek: number }[] {
-  const out: { dateStr: string; weekStart: string; dayOfWeek: number }[] = []
   const raw = requestedDays.trim()
-  if (!raw) return out
+  if (!raw) return []
 
-  // Match month (abbrev or full) and day(s): "Mar 15", "March 22-23", "Mar 22 – 23"
-  const monthMatch = raw.match(/^([a-zA-Z]+)\s+(\d+)(?:\s*[-–—to]+\s*(\d+))?/i)
-  if (!monthMatch) return out
-
-  const monthStr = monthMatch[1].toLowerCase()
-  const month = MONTHS[monthStr] ?? MONTHS[monthStr.slice(0, 3)]
-  if (month === undefined) return out
-
-  const day1 = parseInt(monthMatch[2], 10)
-  const day2 = monthMatch[3] != null ? parseInt(monthMatch[3], 10) : null
-
+  // Split on comma or " and " to support multiple ranges
+  const segments = raw.split(/\s*,\s*|\s+and\s+/i).map((s) => s.trim()).filter(Boolean)
+  const dateSet = new Set<string>()
   const dates: Date[] = []
-  const d1 = new Date(referenceYear, month, day1)
-  if (!Number.isNaN(d1.getTime())) dates.push(d1)
-  if (day2 != null && !Number.isNaN(day2)) {
-    const d2 = new Date(referenceYear, month, day2)
-    if (!Number.isNaN(d2.getTime())) {
-      for (let d = new Date(d1); d <= d2; d.setDate(d.getDate() + 1)) {
-        dates.push(new Date(d))
+
+  for (const segment of segments) {
+    const part = parseOneSegment(segment, referenceYear)
+    for (const d of part) {
+      const key = format(d, 'yyyy-MM-dd')
+      if (!dateSet.has(key)) {
+        dateSet.add(key)
+        dates.push(d)
       }
     }
   }
 
-  for (const d of dates) {
-    const dateStr = format(d, 'yyyy-MM-dd')
-    const weekStart = format(startOfWeek(d, { weekStartsOn: 0 }), 'yyyy-MM-dd')
-    const dayOfWeek = getDay(d) // 0 Sun .. 6 Sat
-    out.push({ dateStr, weekStart, dayOfWeek })
-  }
-  return out
+  dates.sort((a, b) => a.getTime() - b.getTime())
+
+  return dates.map((d) => ({
+    dateStr: format(d, 'yyyy-MM-dd'),
+    weekStart: format(startOfWeek(d, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+    dayOfWeek: getDay(d),
+  }))
 }
 
 /**

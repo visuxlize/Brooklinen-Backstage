@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq, sql } from 'drizzle-orm'
+import { getAppUrl } from '@/lib/app-config'
 
 /**
  * GET /api/link-profile
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
   const base = request.headers.get('x-forwarded-host')
     ? `${request.headers.get('x-forwarded-proto') ?? 'https'}://${request.headers.get('x-forwarded-host')}`
     : request.url.replace(/\/api\/link-profile.*$/, '')
-  const baseUrl = base || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const baseUrl = base || getAppUrl()
 
   const supabase = await createClient()
   const { data: { user: authUser } } = await supabase.auth.getUser()

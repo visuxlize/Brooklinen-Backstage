@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isStoreLeader } from '@/lib/roles'
 import { applyRtoApprovalToAvailabilityAndSchedule } from '@/lib/rtoAvailabilitySync'
+import { getAppUrl } from '@/lib/app-config'
 
 const patchSchema = z.object({
   status: z.enum(['approved', 'denied', 'pending']),
@@ -68,7 +69,7 @@ export async function PATCH(
     // Send email notification if approved/denied
     if (status !== 'pending') {
       try {
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/rto/email`, {
+        await fetch(`${getAppUrl()}/api/rto/email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
