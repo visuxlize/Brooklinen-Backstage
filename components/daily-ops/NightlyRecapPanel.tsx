@@ -324,7 +324,7 @@ export function NightlyRecapPanel() {
               const isCurrency = c.key === 'netRevenue' || c.key === 'returns'
               const val = actualDisplay[c.key as keyof typeof actualDisplay] ?? null
               const currencyVal = c.key === 'netRevenue' ? actuals.netRevenue : actuals.returns
-              const hasCurrencyValue = currencyVal != null && currencyVal !== ''
+              const hasCurrencyValue = currencyVal != null
               return (
                 <td key={c.key} className="text-center py-1 px-2">
                   {isComputed ? (
