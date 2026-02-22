@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { createClient } from '@supabase/supabase-js'
+import { isFullControl, isStoreLeader, normalizeRole } from '@/lib/roles'
 
 function getServiceClient() {
   return createClient(
@@ -14,38 +15,38 @@ function getServiceClient() {
   )
 }
 
+const ROLE_ENUM = ['ops', 'area_manager', 'store_leader', 'lead', 'associate'] as const
 const createUserSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(6),
-  role: z.enum(['ops', 'leader', 'associate']),
+  role: z.enum(ROLE_ENUM),
   storeId: z.number().int().nullable().optional(),
 })
 
 const patchUserSchema = z.object({
   name: z.string().min(1).optional(),
   email: z.string().email().optional(),
-  role: z.enum(['ops', 'leader', 'associate']).optional(),
+  role: z.enum(ROLE_ENUM).optional(),
   storeId: z.number().int().nullable().optional(),
 })
 
-// GET /api/admin/users?storeId=101  — ops gets all, leader gets their store
+// GET /api/admin/users?storeId=101  — full control gets all; store leader gets their store
 export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const role = normalizeRole(user.role)
+  if (role === 'lead' || role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
   const storeIdParam = searchParams.get('storeId')
 
   let query = db.select().from(users).$dynamic()
 
-  if (user.role === 'leader') {
-    // Leaders only see their store
+  if (isStoreLeader(user)) {
     if (!user.storeId) return NextResponse.json({ data: [] })
     query = query.where(eq(users.storeId, user.storeId))
   } else if (storeIdParam) {
-    // Ops can optionally filter by store
     query = query.where(eq(users.storeId, parseInt(storeIdParam)))
   }
 
@@ -57,25 +58,29 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const currentUser = await getCurrentUser()
   if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (currentUser.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(currentUser.role) === 'lead' || normalizeRole(currentUser.role) === 'associate') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
     const body = await request.json()
     const validated = createUserSchema.parse(body)
 
-    // Leaders can only add users to their own store
-    if (currentUser.role === 'leader') {
-      if (validated.role === 'ops') {
-        return NextResponse.json({ error: 'Leaders cannot create ops users' }, { status: 403 })
+    if (isStoreLeader(currentUser)) {
+      if (validated.role === 'ops' || validated.role === 'area_manager') {
+        return NextResponse.json({ error: 'Store leaders cannot create OPS or Area Manager users' }, { status: 403 })
       }
       if (validated.storeId !== currentUser.storeId) {
         return NextResponse.json({ error: 'Forbidden: can only add users to your store' }, { status: 403 })
       }
     }
 
+    if (validated.role === 'area_manager' && (validated.storeId == null || validated.storeId === 0)) {
+      return NextResponse.json({ error: 'Area Manager must be assigned to a store' }, { status: 400 })
+    }
+
     const supabase = getServiceClient()
 
-    // Create Supabase auth user with password (no invite email)
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: validated.email,
       password: validated.password,
@@ -87,7 +92,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: authError.message }, { status: 400 })
     }
 
-    // Insert into users table
+    const storeIdForInsert = validated.role === 'ops' ? null : (validated.storeId ?? null)
     const [newUser] = await db
       .insert(users)
       .values({
@@ -95,7 +100,7 @@ export async function POST(request: Request) {
         name: validated.name,
         email: validated.email,
         role: validated.role,
-        storeId: validated.role === 'ops' ? null : (validated.storeId ?? null),
+        storeId: storeIdForInsert,
       })
       .returning()
 
@@ -113,7 +118,9 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const currentUser = await getCurrentUser()
   if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (currentUser.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(currentUser.role) === 'lead' || normalizeRole(currentUser.role) === 'associate') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { searchParams } = new URL(request.url)
   const userId = searchParams.get('id')
@@ -123,19 +130,17 @@ export async function PATCH(request: Request) {
     const body = await request.json()
     const validated = patchUserSchema.parse(body)
 
-    // Fetch existing user to enforce scope
     const [existing] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
     if (!existing) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-    // Leaders can only edit users in their own store, and cannot promote to ops or leader
-    if (currentUser.role === 'leader') {
+    if (isStoreLeader(currentUser)) {
       if (existing.storeId !== currentUser.storeId) {
         return NextResponse.json({ error: 'Forbidden: not your store' }, { status: 403 })
       }
-      if (validated.role && validated.role !== 'associate') {
-        return NextResponse.json({ error: 'Leaders can only assign associate role' }, { status: 403 })
+      if (validated.role && validated.role !== 'store_leader' && validated.role !== 'lead' && validated.role !== 'associate') {
+        return NextResponse.json({ error: 'Store leaders can only assign Store Leader, Lead, or Associate' }, { status: 403 })
       }
-      if (validated.storeId && validated.storeId !== currentUser.storeId) {
+      if (validated.storeId != null && validated.storeId !== currentUser.storeId) {
         return NextResponse.json({ error: 'Forbidden: cannot move users between stores' }, { status: 403 })
       }
     }
@@ -144,7 +149,11 @@ export async function PATCH(request: Request) {
     if (validated.name !== undefined) updateData.name = validated.name
     if (validated.email !== undefined) updateData.email = validated.email
     if (validated.role !== undefined) updateData.role = validated.role
-    if ('storeId' in validated) updateData.storeId = validated.role === 'ops' ? null : validated.storeId
+    if (validated.role !== undefined) {
+      updateData.storeId = validated.role === 'ops' ? null : (validated.storeId ?? existing.storeId ?? null)
+    } else if ('storeId' in validated) {
+      updateData.storeId = validated.storeId ?? null
+    }
 
     const [updated] = await db
       .update(users)
@@ -172,17 +181,18 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const currentUser = await getCurrentUser()
   if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (currentUser.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(currentUser.role) === 'lead' || normalizeRole(currentUser.role) === 'associate') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { searchParams } = new URL(request.url)
   const userId = searchParams.get('id')
   if (!userId) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  // Fetch to enforce scope
   const [existing] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
   if (!existing) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  if (currentUser.role === 'leader' && existing.storeId !== currentUser.storeId) {
+  if (isStoreLeader(currentUser) && existing.storeId !== currentUser.storeId) {
     return NextResponse.json({ error: 'Forbidden: not your store' }, { status: 403 })
   }
 

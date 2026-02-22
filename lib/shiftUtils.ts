@@ -8,6 +8,18 @@ export const SHIFT_TYPES = {
 
 const TIME_RANGE_REGEX = /^(\d+)(?::(\d+))?\s*(AM|PM)?\s*[-–]\s*(\d+)(?::(\d+))?\s*(AM|PM)?$/i
 
+/**
+ * Labor-law break deduction (unpaid) based on gross shift length.
+ * - 5 hours or less: no break.
+ * - Over 5 and up to 8 hours: 30 minutes (0.5).
+ * - Over 8 hours: 1 hour (1.0).
+ */
+export function getBreakDeductionHours(grossHours: number): number {
+  if (grossHours <= 5) return 0
+  if (grossHours <= 8) return 0.5
+  return 1
+}
+
 function parseTimeRangeToMinutes(val: string): { start: number; end: number } | null {
   const m = val.match(TIME_RANGE_REGEX)
   if (!m) return null
@@ -36,6 +48,16 @@ export function parseHours(val: string | null | undefined): number {
   const range = parseTimeRangeToMinutes(upper)
   if (!range) return 0
   return Math.max(0, Math.round((range.end - range.start) / 60))
+}
+
+/**
+ * Paid hours for a shift after applying lunch break deduction (labor-law rules).
+ * Use this for "Actual hours" and budget comparisons. Example: 11AM–7PM → 8h gross → 7.5h paid.
+ */
+export function parsePaidHours(val: string | null | undefined): number {
+  const gross = parseHours(val)
+  const deduction = getBreakDeductionHours(gross)
+  return Math.max(0, Math.round((gross - deduction) * 10) / 10)
 }
 
 export function getShiftType(val: string | null | undefined) {

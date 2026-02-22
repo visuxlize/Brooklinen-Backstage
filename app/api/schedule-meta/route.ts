@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { scheduleWeekMeta } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeRole, isStoreLeader, isFullControl } from '@/lib/roles'
 
 const hoursOverrideSchema = z.object({
   sun: z.string().optional(),
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing or invalid storeId / weekStart' }, { status: 400 })
   }
 
-  if (user.role !== 'ops' && user.storeId !== storeId) {
+  if (!isFullControl(user) && user.storeId !== storeId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -56,13 +57,13 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
     const { storeId, weekStart, workload, promotions, hoursOverride } = putSchema.parse(body)
 
-    if (user.role === 'leader' && user.storeId !== storeId) {
+    if (isStoreLeader(user) && user.storeId !== storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

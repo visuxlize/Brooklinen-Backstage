@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { trafficWeekly, hourlyTraffic } from '@/lib/db/schema'
 import { and, eq, desc } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeRole, isFullControl, isStoreLeader } from '@/lib/roles'
 import { sql } from 'drizzle-orm'
 
 const postSchema = z.object({
@@ -30,7 +31,7 @@ const bulkPostSchema = z.object({
 export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
   const storeId = parseInt(searchParams.get('storeId') ?? '')
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing storeId' }, { status: 400 })
   }
 
-  if (user.role !== 'ops' && user.storeId !== storeId) {
+  if (!isFullControl(user) && user.storeId !== storeId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
     // Bulk upload: { storeId, weeks: [{ weekStart, sun, mon, ... }] }
     if (Array.isArray(body.weeks) && body.storeId != null) {
       const bulk = bulkPostSchema.parse(body)
-      if (user.role === 'leader' && user.storeId !== bulk.storeId) {
+      if (isStoreLeader(user) && user.storeId !== bulk.storeId) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
       for (const w of bulk.weeks) {
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
     }
 
     const validated = postSchema.parse(body)
-    if (user.role === 'leader' && user.storeId !== validated.storeId) {
+    if (isStoreLeader(user) && user.storeId !== validated.storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

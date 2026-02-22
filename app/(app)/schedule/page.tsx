@@ -3,7 +3,8 @@ import { getCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { schedules, users, retailData, stores } from '@/lib/db/schema'
 import { and, eq, gte, lte } from 'drizzle-orm'
-import { getStore, STORE_CONFIG } from '@/lib/stores'
+import { getStore, STORE_CONFIG, type StoreConfig } from '@/lib/stores'
+import { canEditSchedule, isFullControl } from '@/lib/roles'
 import { ScheduleGrid } from '@/components/schedule/ScheduleGrid'
 import { format, addDays } from 'date-fns'
 import { getWeekStartByIndex, getWeekIndexForDate, getTotalWeeks } from '@/lib/scheduleWeeks'
@@ -17,9 +18,9 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
   if (!user) redirect('/login')
 
   const params = await searchParams
-  // Determine store ID
+  // Determine store ID: OPS and Area Manager can pick any store; others are limited to their store
   let storeId: number
-  if (user.role === 'ops') {
+  if (isFullControl({ role: user.role, storeId: user.storeId })) {
     storeId = params.store ? parseInt(params.store) : STORE_CONFIG[0].id
   } else {
     storeId = user.storeId!
@@ -33,7 +34,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     ? { id: storeRow.id, name: storeRow.name, city: storeRow.city, color: storeRow.color, hours: storeRow.hours as Record<string, string> }
     : staticStore
 
-  const canEdit = user.role === 'ops' || user.role === 'leader'
+  const canEdit = canEditSchedule({ role: user.role, storeId: user.storeId }, storeId)
 
   // Employees come ONLY from User Management (users table for this store)
   const storeUsers = await db
@@ -112,7 +113,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
 
   return (
     <ScheduleGrid
-      store={store}
+      store={store as StoreConfig}
       canEdit={canEdit}
       employees={employees}
       initialData={initialData}

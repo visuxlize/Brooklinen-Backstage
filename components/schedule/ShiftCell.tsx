@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Palmtree, RefreshCw, Thermometer, X, Check } from 'lucide-react'
-import { getShiftType, SHIFT_TYPES, parseHours, normalizeShiftDisplay } from '@/lib/shiftUtils'
+import { getShiftType, SHIFT_TYPES, normalizeShiftDisplay } from '@/lib/shiftUtils'
 import { cn } from '@/lib/utils'
 
 const QUICK_SET_ICONS = {

@@ -268,11 +268,11 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
     async function fetchData() {
       setLoading(true)
       try {
-        const res = await fetch(`/api/traffic?storeId=${store.id}`)
+        const res = await fetch(`/api/traffic?storeId=${store.id}`, { cache: 'no-store' })
         if (res.ok) {
           const { weekly, hourly } = await res.json()
-          setWeeklyData(weekly ?? [])
-          setHourlyData(hourly ?? [])
+          setWeeklyData(Array.isArray(weekly) ? weekly : [])
+          setHourlyData(Array.isArray(hourly) ? hourly : [])
         }
       } finally {
         setLoading(false)
@@ -282,7 +282,12 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
   }, [store.id])
 
   const latest = weeklyData[0]
-  const trendMult = latest?.trendMult != null && latest.trendMult !== '' ? parseFloat(latest.trendMult) : null
+  const trendMult =
+    latest?.trendMult != null && latest.trendMult !== ''
+      ? parseFloat(String(latest.trendMult))
+      : null
+  const trafficCountNum = latest?.trafficCount != null ? Number(latest.trafficCount) : null
+  const totalNum = latest?.total != null ? Number(latest.total) : null
   const trendUp = trendMult !== null && trendMult >= 0.02
   const trendDown = trendMult !== null && trendMult <= -0.02
   const trendDirection = trendUp ? '▲ Trending Up' : trendDown ? '▼ Trending Down' : '→ Stable'
@@ -377,7 +382,8 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
       const trendFound = wb.SheetNames.some((n) => /last\s*5\s*weeks\s*traffic\s*trends/i.test(n))
       const histFound = wb.SheetNames.some((n) => /historical\s*week\s*data/i.test(n))
       if (trendFound && histFound) {
-        const parsed = parseRetailTrafficWorkbook(wb, store, XLSX)
+        type XLSXUtils = { utils: { sheet_to_json: (sheet: unknown, opts: { header: number; defval: string }) => (string | number)[][] } }
+        const parsed = parseRetailTrafficWorkbook(wb, store, XLSX as XLSXUtils)
         if (parsed.weeks.length > 0) {
           setExcelWeeks(parsed.weeks)
           return
@@ -428,11 +434,12 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data?.error ?? `HTTP ${res.status}`)
       }
-      const fetchRes = await fetch(`/api/traffic?storeId=${store.id}`)
+      // Refetch with cache bust so KPI cards and charts get the new data
+      const fetchRes = await fetch(`/api/traffic?storeId=${store.id}&_=${Date.now()}`, { cache: 'no-store' })
       if (fetchRes.ok) {
         const { weekly, hourly } = await fetchRes.json()
-        setWeeklyData(weekly ?? [])
-        setHourlyData(hourly ?? [])
+        setWeeklyData(Array.isArray(weekly) ? weekly : [])
+        setHourlyData(Array.isArray(hourly) ? hourly : [])
       }
       setExcelWeeks([])
       setToast(`Applied ${weeks.length} week(s). Daily breakdown, KPIs, and history updated.`)
@@ -469,7 +476,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         </div>
         <StatCard
           label="Traffic count"
-          value={latest?.trafficCount?.toLocaleString() ?? '—'}
+          value={trafficCountNum != null ? trafficCountNum.toLocaleString() : '—'}
           accentColor={store.color}
           icon={<Users className="w-4 h-4" />}
         />
@@ -481,7 +488,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         />
         <StatCard
           label="Weekly total"
-          value={latest?.total?.toLocaleString() ?? '—'}
+          value={totalNum != null ? totalNum.toLocaleString() : '—'}
           accentColor={store.color}
         />
       </div>

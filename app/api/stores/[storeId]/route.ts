@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { stores } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
+import { isFullControl } from '@/lib/roles'
 
 const hoursSchema = z.object({
   sun: z.string(),
@@ -32,7 +33,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid storeId' }, { status: 400 })
   }
 
-  if (user.role !== 'ops' && user.storeId !== storeId) {
+  if (!isFullControl(user) && user.storeId !== storeId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -54,7 +55,7 @@ export async function PATCH(
 ) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'ops') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isFullControl(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { storeId: storeIdParam } = await params
   const storeId = parseInt(storeIdParam ?? '', 10)

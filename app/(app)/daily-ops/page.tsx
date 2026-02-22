@@ -7,5 +7,9 @@ export default async function DailyOpsPage() {
   if (!user) redirect('/login')
   if (user.role === 'associate') redirect('/schedule')
 
-  return <DailyOpsPageClient />
+  return (
+    <DailyOpsPageClient
+      currentUser={{ role: user.role, storeId: user.storeId }}
+    />
+  )
 }

@@ -1,4 +1,4 @@
-import { parseHours } from '@/lib/shiftUtils'
+import { parsePaidHours } from '@/lib/shiftUtils'
 
 const DAY_KEYS = [0, 1, 2, 3, 4, 5, 6]
 
@@ -22,7 +22,7 @@ export function HoursSummary({
   allowableHours,
 }: HoursSummaryProps) {
   const dayTotals = DAY_KEYS.map((day) =>
-    employees.reduce((sum, emp) => sum + parseHours(data[emp]?.[day] ?? ''), 0)
+    employees.reduce((sum, emp) => sum + parsePaidHours(data[emp]?.[day] ?? ''), 0)
   )
   const grandTotal = dayTotals.reduce((a, b) => a + b, 0)
   const budgetWtd = budgetHoursDaily?.reduce((a, b) => a + b, 0) ?? 0

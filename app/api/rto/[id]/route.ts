@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { rtoRequests } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeRole, isStoreLeader } from '@/lib/roles'
 
 const patchSchema = z.object({
   status: z.enum(['approved', 'denied', 'pending']),
@@ -12,25 +13,28 @@ const patchSchema = z.object({
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
+    const { id } = await params
     const body = await request.json()
     const { status, leaderNote } = patchSchema.parse(body)
 
     const [existing] = await db
       .select()
       .from(rtoRequests)
-      .where(eq(rtoRequests.id, params.id))
+      .where(eq(rtoRequests.id, id))
       .limit(1)
 
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (user.role === 'leader' && user.storeId !== existing.storeId) {
+    if (isStoreLeader(user) && user.storeId !== existing.storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -41,7 +45,7 @@ export async function PATCH(
         leaderNote: leaderNote ?? null,
         updatedAt: new Date(),
       })
-      .where(eq(rtoRequests.id, params.id))
+      .where(eq(rtoRequests.id, id))
       .returning()
 
     // Send email notification if approved/denied
@@ -51,7 +55,7 @@ export async function PATCH(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            requestId: params.id,
+            requestId: id,
             employeeName: existing.employeeName,
             employeeEmail: existing.employeeEmail,
             type: existing.type,

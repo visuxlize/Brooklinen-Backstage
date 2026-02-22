@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { availability, users } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeRole, isStoreLeader } from '@/lib/roles'
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T12:00:00')
@@ -41,7 +42,7 @@ const postSchema = z.object({
 export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
   const storeId = searchParams.get('storeId')
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
   if (Number.isNaN(sid)) return NextResponse.json({ error: 'Invalid storeId' }, { status: 400 })
   const weekStart = searchParams.get('weekStart') ?? null
 
-  if (user.role === 'leader' && user.storeId !== sid) {
+  if (isStoreLeader(user) && user.storeId !== sid) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

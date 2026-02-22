@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Karla, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
+import { APP_NAME, APP_DESCRIPTION } from '@/lib/app-config'
 
 const karla = Karla({
   subsets: ['latin'],
@@ -16,8 +17,12 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Brooklinen Scheduling Platform',
-  description: 'Scheduling and retail operations for Brooklinen stores',
+  title: APP_NAME,
+  description: APP_DESCRIPTION,
+  icons: {
+    icon: '/images/brooklinen-icon.png',
+    apple: '/images/brooklinen-icon.png',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

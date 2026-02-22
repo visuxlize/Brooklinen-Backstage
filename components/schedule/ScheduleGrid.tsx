@@ -10,7 +10,7 @@ import { WeekNav } from './WeekNav'
 import { HoursSummary } from './HoursSummary'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar } from '@/components/ui/Avatar'
-import { parseHours, SHIFT_TYPES, shiftFitsInWindow, formatTime24to12 } from '@/lib/shiftUtils'
+import { parsePaidHours, SHIFT_TYPES, shiftFitsInWindow, formatTime24to12 } from '@/lib/shiftUtils'
 import type { StoreConfig } from '@/lib/stores'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
@@ -97,6 +97,7 @@ export function ScheduleGrid({
   const [copySource, setCopySource] = useState<{ employeeName: string; dayOfWeek: number } | null>(null)
   const [copyMode, setCopyMode] = useState(false)
   const [deleteState, setDeleteState] = useState<'idle' | 'loading'>('idle')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [weeklyBudget, setWeeklyBudget] = useState<number | null>(initialWeeklyBudget ?? null)
   const [weeklyLy, setWeeklyLy] = useState<number | null>(initialWeeklyLy ?? null)
   const [weekAvailability, setWeekAvailability] = useState<Record<string, Record<number, { type: string; start?: string; end?: string }>> | null>(null)
@@ -231,7 +232,7 @@ export function ScheduleGrid({
       const budgetRow = [0, 1, 2, 3, 4, 5, 6].map((i) => `<td style="padding:6px;text-align:center;font-size:11px;border:1px solid #e2e8f0;">${formatCurrency(dailyBudget[i] ?? 0)}</td>`).join('')
       const employeeRows = employees.map((emp) => {
         const days = gridData[emp] ?? {}
-        const wtd = Object.values(days).reduce((sum, v) => sum + (v === 'N/A' ? 0 : parseHours(v)), 0)
+        const wtd = Object.values(days).reduce((sum, v) => sum + (v === 'N/A' ? 0 : parsePaidHours(v)), 0)
         const cells = [0, 1, 2, 3, 4, 5, 6].map((day) => {
           const cellAvail = weekAvailability?.[emp]?.[day]
           const display = cellAvail?.type === 'na' ? 'N/A' : (days[day] ?? '—')
@@ -240,7 +241,7 @@ export function ScheduleGrid({
         return `<tr><td style="padding:6px 10px;font-size:11px;border:1px solid #e2e8f0;">${emp}</td>${cells}<td style="padding:6px;text-align:center;font-weight:600;font-size:11px;border:1px solid #e2e8f0;">${wtd}h</td></tr>`
       }).join('')
       const dayTotals = [0, 1, 2, 3, 4, 5, 6].map((day) =>
-        employees.reduce((sum, emp) => sum + parseHours((gridData[emp] ?? {})[day] === 'N/A' ? '' : (gridData[emp] ?? {})[day] ?? ''), 0)
+        employees.reduce((sum, emp) => sum + parsePaidHours((gridData[emp] ?? {})[day] === 'N/A' ? '' : (gridData[emp] ?? {})[day] ?? ''), 0)
       )
       const actualRow = dayTotals.map((h) => `<td style="padding:6px;text-align:center;font-weight:600;font-size:11px;border:1px solid #e2e8f0;">${h > 0 ? h + 'h' : '—'}</td>`).join('')
       const grandTotal = dayTotals.reduce((a, b) => a + b, 0)
@@ -284,7 +285,7 @@ export function ScheduleGrid({
   // Compute stats (treat N/A as 0 hours, don't count N/A-only days toward staff)
   const allHours = employees.map((emp) => {
     const days = gridData[emp] ?? {}
-    return Object.values(days).reduce((sum, v) => sum + (v === 'N/A' ? 0 : parseHours(v)), 0)
+    return Object.values(days).reduce((sum, v) => sum + (v === 'N/A' ? 0 : parsePaidHours(v)), 0)
   })
   const totalHours = allHours.reduce((a, b) => a + b, 0)
   const staffCount = employees.filter((emp) => {
@@ -324,12 +325,12 @@ export function ScheduleGrid({
   }
 
   async function handleDeleteSchedule() {
-    if (!confirm('Delete the entire schedule for this week? This cannot be undone.')) return
     setDeleteState('loading')
     try {
       const res = await fetch(`/api/schedule?storeId=${store.id}&weekStart=${weekStartStr}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete')
       setGridData({})
+      setShowDeleteConfirm(false)
       showToast('Schedule cleared.')
     } catch {
       setToast('Failed to delete schedule.')
@@ -402,7 +403,41 @@ export function ScheduleGrid({
   }
 
   return (
-    <div className="p-3 sm:p-4 flex flex-col min-h-[calc(100vh-3rem)] max-w-full">
+    <div className="p-3 sm:p-4 flex flex-col min-h-[calc(100vh-3rem)] max-w-full relative">
+      {/* Delete schedule confirmation card */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowDeleteConfirm(false)}>
+          <div
+            className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-600 p-6 max-w-md w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-base font-medium text-slate-900 dark:text-slate-100 mb-1">
+              Delete entire schedule?
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              This will clear the schedule for this week for {store.name}. This cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 transition-colors"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSchedule}
+                disabled={deleteState === 'loading'}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-50 transition-colors"
+              >
+                {deleteState === 'loading' ? 'Deleting…' : 'Yes, delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Week navigation - compact */}
       <WeekNav
         weekIdx={weekIdx}
@@ -472,7 +507,7 @@ export function ScheduleGrid({
             <span className="mx-2 text-slate-300 dark:text-slate-500">|</span>
             <button
               type="button"
-              onClick={handleDeleteSchedule}
+              onClick={() => setShowDeleteConfirm(true)}
               disabled={deleteState === 'loading'}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60 disabled:opacity-50"
             >
@@ -646,7 +681,7 @@ export function ScheduleGrid({
               {employees.map((emp, index) => {
                 const empData = gridData[emp] ?? {}
                 const weekTotal = Object.values(empData).reduce(
-                  (sum, v) => sum + parseHours(v),
+                  (sum, v) => sum + parsePaidHours(v),
                   0
                 )
                 const isOT = weekTotal > 40

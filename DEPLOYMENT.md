@@ -1,6 +1,43 @@
 # Deployment Guide - Vercel
 
-This guide walks you through deploying your SaaS app to Vercel.
+This guide walks you through deploying Brooklinen Backstage to Vercel.
+
+## Quick deploy (CLI)
+
+1. **Push to GitHub** (if not already):
+   ```bash
+   git remote add origin https://github.com/YOUR_ORG/Brooklinen-Scheduling.git  # if needed
+   git push -u origin main
+   ```
+
+2. **Install Vercel CLI and link** (one-time):
+   ```bash
+   npm i -g vercel
+   vercel login
+   vercel link
+   ```
+
+3. **Set environment variables** in [Vercel Dashboard](https://vercel.com/dashboard) → your project → **Settings** → **Environment Variables**. Add:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `DATABASE_URL` (Postgres connection string from Supabase)
+   - `NEXT_PUBLIC_APP_URL` (set to `https://your-app.vercel.app` after first deploy)
+
+4. **Deploy**:
+   ```bash
+   vercel --prod
+   ```
+   Or connect the repo in [vercel.com/new](https://vercel.com/new) and deploy from the dashboard (auto-deploys on push).
+
+5. **After first deploy**: In Supabase → **Authentication** → **URL Configuration**, set **Site URL** and **Redirect URLs** to your Vercel URL (e.g. `https://your-app.vercel.app` and `https://your-app.vercel.app/**`).
+
+6. **Database migrations**: Run against production DB before or after deploy:
+   ```bash
+   DATABASE_URL="your-production-database-url" npm run db:migrate
+   ```
+
+---
 
 ## Prerequisites
 

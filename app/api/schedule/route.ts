@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { schedules, retailData, trafficWeekly, hourlyTraffic, scheduleWeekMeta } from '@/lib/db/schema'
 import { and, eq, gte, lte, desc } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeRole, isStoreLeader, isFullControl } from '@/lib/roles'
 import { sql } from 'drizzle-orm'
 import {
   getAllowableHours,
@@ -23,7 +24,8 @@ const postSchema = z.object({
 export async function DELETE(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const role = normalizeRole(user.role)
+  if (role === 'lead' || role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
   const storeId = parseInt(searchParams.get('storeId') ?? '')
@@ -33,7 +35,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Missing or invalid storeId / weekStart' }, { status: 400 })
   }
 
-  if (user.role === 'leader' && user.storeId !== storeId) {
+  if (isStoreLeader(user) && user.storeId !== storeId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -57,7 +59,7 @@ export async function GET(request: Request) {
   }
 
   // Enforce role-based access
-  if (user.role !== 'ops' && user.storeId !== storeId) {
+  if (!isFullControl(user) && user.storeId !== storeId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -193,13 +195,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
     const body = await request.json()
     const validated = postSchema.parse(body)
 
-    if (user.role === 'leader' && user.storeId !== validated.storeId) {
+    if (isStoreLeader(user) && user.storeId !== validated.storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

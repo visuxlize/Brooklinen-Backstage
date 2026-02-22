@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { schedules } from '@/lib/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeRole, isStoreLeader } from '@/lib/roles'
 import { sql } from 'drizzle-orm'
 
 const bodySchema = z.object({
@@ -18,13 +19,15 @@ const bodySchema = z.object({
 export async function POST(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
     const body = await request.json()
     const validated = bodySchema.parse(body)
 
-    if (user.role === 'leader' && user.storeId !== validated.storeId) {
+    if (isStoreLeader(user) && user.storeId !== validated.storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

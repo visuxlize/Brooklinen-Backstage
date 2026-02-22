@@ -4,7 +4,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LogOut, Search, Users, Sun, Moon } from 'lucide-react'
+import { BrooklinenLogo } from '@/components/ui/BrooklinenLogo'
 import { STORE_CONFIG } from '@/lib/stores'
+import { ROLE_LABELS, normalizeRole } from '@/lib/roles'
+import { APP_NAME_SHORT } from '@/lib/app-config'
 import { Avatar } from '@/components/ui/Avatar'
 import { useStore } from '@/lib/store-context'
 import { createClient } from '@/lib/supabase/client'
@@ -23,14 +26,16 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProps) {
+  const router = useRouter()
   const { activeStoreId, setActiveStoreId } = useStore()
   const { theme, toggleTheme } = useTheme()
   const [search, setSearch] = useState('')
   const pathname = usePathname()
 
-  const isOps = currentUser.role === 'ops'
+  const isFullControl = currentUser.role === 'ops' || currentUser.role === 'area_manager'
+  const canAccessAdmin = isFullControl || currentUser.role === 'store_leader' || currentUser.role === 'leader'
 
-  const visibleStores = isOps
+  const visibleStores = isFullControl
     ? STORE_CONFIG.filter((s) =>
         search
           ? s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -57,10 +62,8 @@ export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProp
       <div className="flex flex-col h-full w-64">
         {/* Header */}
         <div className="p-5 border-b border-white/10">
-          <div className="text-xs font-semibold uppercase tracking-widest text-white/50 mb-0.5">
-            Brooklinen
-          </div>
-          <div className="text-xl font-extrabold text-white tracking-tight">Scheduling</div>
+          <BrooklinenLogo variant="white" height={28} className="mb-1" />
+          <div className="text-xs font-semibold uppercase tracking-widest text-white/60">{APP_NAME_SHORT}</div>
         </div>
 
         {/* User info */}
@@ -68,12 +71,12 @@ export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProp
           <Avatar name={currentUser.name} size="sm" color={activeStore?.color ?? '#1B4B8A'} />
           <div className="min-w-0">
             <div className="text-sm font-semibold text-white truncate">{currentUser.name}</div>
-            <div className="text-xs text-slate-400 capitalize">{currentUser.role}</div>
+            <div className="text-xs text-slate-400">{ROLE_LABELS[normalizeRole(currentUser.role)] ?? currentUser.role}</div>
           </div>
         </div>
 
         {/* Search (ops only) */}
-        {isOps && (
+        {isFullControl && (
           <div className="px-4 py-3 border-b border-white/10">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -114,7 +117,7 @@ export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProp
                   <div className="text-sm font-medium text-white truncate">{store.name}</div>
                   <div className="text-xs text-slate-400 truncate">{store.city}</div>
                 </div>
-                {isOps && pending > 0 && (
+                {isFullControl && pending > 0 && (
                   <span className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
                     {pending > 9 ? '9+' : pending}
                   </span>
@@ -124,8 +127,8 @@ export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProp
           })}
         </nav>
 
-        {/* User Management (ops + leader only) */}
-        {(currentUser.role === 'ops' || currentUser.role === 'leader') && (
+        {/* User Management (OPS, Area Manager, Store Leader) */}
+        {canAccessAdmin && (
           <div className="px-4 py-2 border-t border-white/10">
             <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 block px-4 py-2">Management</span>
             <Link

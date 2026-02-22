@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { isFullControl } from '@/lib/roles'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing or invalid storeId' }, { status: 400 })
   }
 
-  if (user.role !== 'ops' && user.storeId !== storeId) {
+  if (!isFullControl(user) && user.storeId !== storeId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

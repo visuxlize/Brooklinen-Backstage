@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { rtoRequests } from '@/lib/db/schema'
 import { eq, and, desc } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeRole, isFullControl } from '@/lib/roles'
 
 const postSchema = z.object({
   storeId: z.number().int(),
@@ -21,7 +22,9 @@ const postSchema = z.object({
 export async function GET(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { searchParams } = new URL(request.url)
   const storeId = parseInt(searchParams.get('storeId') ?? '')
@@ -30,7 +33,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing storeId' }, { status: 400 })
   }
 
-  if (user.role !== 'ops' && user.storeId !== storeId) {
+  if (!isFullControl(user) && user.storeId !== storeId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

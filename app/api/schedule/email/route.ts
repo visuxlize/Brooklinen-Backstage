@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getCurrentUser } from '@/lib/auth'
+import { normalizeRole, isStoreLeader } from '@/lib/roles'
 import { resend } from '@/lib/resend'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
@@ -18,13 +19,13 @@ const schema = z.object({
 export async function POST(request: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (normalizeRole(user.role) === 'lead' || normalizeRole(user.role) === 'associate') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
     const { storeId, weekStart, imageBase64, recipientEmails } = schema.parse(body)
 
-    if (user.role === 'leader' && user.storeId !== storeId) {
+    if (isStoreLeader(user) && user.storeId !== storeId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -6,6 +6,7 @@ import { Menu } from 'lucide-react'
 import { STORE_CONFIG } from '@/lib/stores'
 import { Avatar } from '@/components/ui/Avatar'
 import { Chip } from '@/components/ui/Chip'
+import { BrooklinenLogo } from '@/components/ui/BrooklinenLogo'
 import { useStore } from '@/lib/store-context'
 
 interface TopBarProps {
@@ -23,7 +24,7 @@ type Tab = { label: string; href: string; badge?: number }
 
 function buildTabs(role: string, storeId: number | null, pendingRtoCount: number): Tab[] {
   const storeParam = storeId ? `?store=${storeId}` : ''
-  if (role === 'ops' || role === 'leader') {
+  if (role === 'ops' || role === 'area_manager' || role === 'leader') {
     return [
       { label: 'Schedule', href: `/schedule${storeParam}` },
       { label: 'Daily Ops', href: `/daily-ops${storeParam}` },
@@ -63,6 +64,12 @@ export function TopBar({ currentUser, onToggleSidebar, pendingRtoCount = 0, side
       >
         <Menu className="w-5 h-5" />
       </button>
+
+      {/* Logo (compact) - visible on main app screens */}
+      <div className="hidden sm:block flex-shrink-0">
+        <BrooklinenLogo variant="navy" height={22} className="dark:hidden" />
+        <BrooklinenLogo variant="white" height={22} className="hidden dark:block" />
+      </div>
 
       {/* Store info - no longer clipped; bar starts after sidebar */}
       {activeStore && (

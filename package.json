@@ -1,6 +1,7 @@
 {
   "name": "saas-starter-kit",
   "version": "1.0.0",
+  "type": "module",
   "description": "Production-ready SaaS starter with Next.js, Supabase, and Drizzle ORM",
   "scripts": {
     "dev": "next dev",

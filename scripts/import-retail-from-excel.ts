@@ -31,6 +31,36 @@ function toWeekStart(dateStr: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** Parse Excel cell to number; strips $ and commas. Returns null if empty or NaN. */
+function parseNum(cell: string | number | null | undefined): number | null {
+  if (cell == null || cell === '') return null
+  if (typeof cell === 'number') return Number.isNaN(cell) ? null : cell
+  const s = String(cell).replace(/[$,\s]/g, '')
+  if (!s) return null
+  const n = Number(s)
+  return Number.isNaN(n) ? null : n
+}
+
+/** Parse Excel date cell to YYYY-MM-DD. Handles serial number or MM/DD/YYYY string. */
+function parseDateCell(cell: string | number | null | undefined): string | null {
+  if (cell == null || cell === '') return null
+  if (typeof cell === 'number') return excelDateToISO(cell)
+  const s = String(cell).trim()
+  if (!s) return null
+  // MM/DD/YYYY or M/D/YYYY
+  const parts = s.split(/[/-]/)
+  if (parts.length === 3) {
+    const month = parseInt(parts[0], 10)
+    const day = parseInt(parts[1], 10)
+    const year = parseInt(parts[2], 10)
+    if (!Number.isNaN(year) && !Number.isNaN(month) && !Number.isNaN(day)) {
+      const d = new Date(year, month - 1, day)
+      if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+    }
+  }
+  return null
+}
+
 async function importRetailData(wb: XLSX.WorkBook): Promise<void> {
   const sheetName = wb.SheetNames.find((n) => n === 'Retail Data' || /retail/i.test(n))
   if (!sheetName) {
@@ -40,42 +70,81 @@ async function importRetailData(wb: XLSX.WorkBook): Promise<void> {
   const sheet = wb.Sheets[sheetName]
   const rows = XLSX.utils.sheet_to_json<(string | number)[]>(sheet, { header: 1 }) as (string | number)[][]
   const header = (rows[0] ?? []) as string[]
-  const storeIdx = header.findIndex((c) => /store/i.test(String(c)))
-  const dateIdx = header.findIndex((c) => /date/i.test(String(c)))
-  const budgetIdx = header.findIndex((c) => /budget|net revenue budget/i.test(String(c)))
-  const lyIdx = header.findIndex((c) => /ly|last year|net revenue ly/i.test(String(c)))
+  const getCol = (patterns: RegExp[]) =>
+    header.findIndex((c) => patterns.some((p) => p.test(String(c))))
 
-  if (storeIdx < 0 || dateIdx < 0 || budgetIdx < 0) {
-    console.log('Retail sheet missing Store/Date/Budget columns; skipping.')
+  const storeIdx = getCol([/^store$/i])
+  const dateIdx = getCol([/^date$/i])
+  const netRevBudgetIdx = getCol([/net revenue budget/i, /net rev.*budget/i])
+  const netRevLyIdx = getCol([/net revenue ly/i, /net rev.*ly/i])
+  const ordersBudgetIdx = getCol([/orders budget/i])
+  const ordersLyIdx = getCol([/orders ly/i])
+  const aovBudgetIdx = getCol([/aov budget/i])
+  const aovLyIdx = getCol([/aov ly/i])
+  const uptBudgetIdx = getCol([/upt budget/i])
+  const uptLyIdx = getCol([/upt ly/i])
+  const cvrBudgetIdx = getCol([/cvr budget/i])
+  const cvrLyIdx = getCol([/cvr ly/i])
+  const trafficBudgetIdx = getCol([/traffic budget/i])
+
+  if (storeIdx < 0 || dateIdx < 0) {
+    console.log('Retail sheet missing Store/Date columns; skipping.')
     return
   }
 
   let n = 0
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]
-    if (!row || row.length < Math.max(storeIdx, dateIdx, budgetIdx)) continue
+    if (!row || row.length === 0) continue
     const storeId = parseStoreId(String(row[storeIdx] ?? ''))
     if (!storeId) continue
-    const dateVal = row[dateIdx]
-    let dateStr: string
-    if (typeof dateVal === 'number') dateStr = excelDateToISO(dateVal)
-    else if (typeof dateVal === 'string') dateStr = dateVal.slice(0, 10)
-    else continue
-    const budget = row[budgetIdx] != null && row[budgetIdx] !== '' ? Number(row[budgetIdx]) : null
-    const ly = lyIdx >= 0 && row[lyIdx] != null && row[lyIdx] !== '' ? Number(row[lyIdx]) : null
-    if (budget == null || Number.isNaN(budget)) continue
+    const dateStr = parseDateCell(row[dateIdx])
+    if (!dateStr) continue
+    const budgetNet = netRevBudgetIdx >= 0 ? parseNum(row[netRevBudgetIdx]) : null
+    const lyNet = netRevLyIdx >= 0 ? parseNum(row[netRevLyIdx]) : null
+
+    const ordersBudget = ordersBudgetIdx >= 0 ? parseNum(row[ordersBudgetIdx]) : null
+    const ordersLy = ordersLyIdx >= 0 ? parseNum(row[ordersLyIdx]) : null
+    const aovBudget = aovBudgetIdx >= 0 ? parseNum(row[aovBudgetIdx]) : null
+    const aovLy = aovLyIdx >= 0 ? parseNum(row[aovLyIdx]) : null
+    const uptBudget = uptBudgetIdx >= 0 ? parseNum(row[uptBudgetIdx]) : null
+    const uptLy = uptLyIdx >= 0 ? parseNum(row[uptLyIdx]) : null
+    const cvrBudget = cvrBudgetIdx >= 0 ? parseNum(row[cvrBudgetIdx]) : null
+    const cvrLy = cvrLyIdx >= 0 ? parseNum(row[cvrLyIdx]) : null
+    const trafficBudget = trafficBudgetIdx >= 0 ? parseNum(row[trafficBudgetIdx]) : null
 
     await db
       .insert(retailData)
       .values({
         storeId,
         date: dateStr,
-        budgetNet: String(budget),
-        lyNet: ly != null && !Number.isNaN(ly) ? String(ly) : null,
+        budgetNet: budgetNet != null ? String(budgetNet) : null,
+        lyNet: lyNet != null ? String(lyNet) : null,
+        ordersBudget: ordersBudget != null ? Math.round(ordersBudget) : null,
+        ordersLy: ordersLy != null ? Math.round(ordersLy) : null,
+        aovBudget: aovBudget != null ? String(aovBudget) : null,
+        aovLy: aovLy != null ? String(aovLy) : null,
+        uptBudget: uptBudget != null ? String(uptBudget) : null,
+        uptLy: uptLy != null ? String(uptLy) : null,
+        cvrBudget: cvrBudget != null ? String(cvrBudget) : null,
+        cvrLy: cvrLy != null ? String(cvrLy) : null,
+        trafficBudget: trafficBudget != null ? Math.round(trafficBudget) : null,
       })
       .onConflictDoUpdate({
         target: [retailData.storeId, retailData.date],
-        set: { budgetNet: sql`excluded.budget_net`, lyNet: sql`excluded.ly_net` },
+        set: {
+          budgetNet: sql`excluded.budget_net`,
+          lyNet: sql`excluded.ly_net`,
+          ordersBudget: sql`excluded.orders_budget`,
+          ordersLy: sql`excluded.orders_ly`,
+          aovBudget: sql`excluded.aov_budget`,
+          aovLy: sql`excluded.aov_ly`,
+          uptBudget: sql`excluded.upt_budget`,
+          uptLy: sql`excluded.upt_ly`,
+          cvrBudget: sql`excluded.cvr_budget`,
+          cvrLy: sql`excluded.cvr_ly`,
+          trafficBudget: sql`excluded.traffic_budget`,
+        },
       })
     n++
   }

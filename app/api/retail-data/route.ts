@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { isFullControl } from '@/lib/roles'
 import { db } from '@/lib/db'
 import { retailData, stores } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing or invalid storeId / date' }, { status: 400 })
   }
 
-  if (user.role !== 'ops' && user.storeId !== storeId) {
+  if (!isFullControl(user) && user.storeId !== storeId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -31,6 +32,15 @@ export async function GET(request: Request) {
       date: retailData.date,
       budgetNet: retailData.budgetNet,
       lyNet: retailData.lyNet,
+      ordersBudget: retailData.ordersBudget,
+      ordersLy: retailData.ordersLy,
+      aovBudget: retailData.aovBudget,
+      aovLy: retailData.aovLy,
+      uptBudget: retailData.uptBudget,
+      uptLy: retailData.uptLy,
+      cvrBudget: retailData.cvrBudget,
+      cvrLy: retailData.cvrLy,
+      trafficBudget: retailData.trafficBudget,
       storeName: stores.name,
     })
     .from(retailData)
@@ -42,23 +52,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'No data for this date' }, { status: 404 })
   }
 
-  const budgetNet = row.budgetNet != null ? Number(row.budgetNet) : null
-  const lyNet = row.lyNet != null ? Number(row.lyNet) : null
+  const toNum = (v: string | number | null | undefined) =>
+    v != null && v !== '' ? Number(v) : null
+
   const storeLabel = `${row.storeId} ${row.storeName ?? ''}`.trim()
 
   return NextResponse.json({
     store: storeLabel,
     date: row.date,
-    netRevBudget: budgetNet,
-    netRevLY: lyNet,
-    ordersBudget: null as number | null,
-    ordersLY: null as number | null,
-    aovBudget: null as number | null,
-    aovLY: null as number | null,
-    uptBudget: null as number | null,
-    uptLY: null as number | null,
-    cvrBudget: null as number | null,
-    cvrLY: null as number | null,
-    trafficBudget: null as number | null,
+    netRevBudget: toNum(row.budgetNet),
+    netRevLY: toNum(row.lyNet),
+    ordersBudget: row.ordersBudget != null ? row.ordersBudget : null,
+    ordersLY: row.ordersLy != null ? row.ordersLy : null,
+    aovBudget: toNum(row.aovBudget),
+    aovLY: toNum(row.aovLy),
+    uptBudget: toNum(row.uptBudget),
+    uptLY: toNum(row.uptLy),
+    cvrBudget: toNum(row.cvrBudget),
+    cvrLY: toNum(row.cvrLy),
+    trafficBudget: row.trafficBudget != null ? row.trafficBudget : null,
   })
 }

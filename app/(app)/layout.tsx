@@ -58,7 +58,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   let pendingCounts: Record<number, number> = {}
   try {
-    if (user.role === 'ops') {
+    if (user.role === 'ops' || user.role === 'area_manager') {
       const pending = await db
         .select({ storeId: rtoRequests.storeId })
         .from(rtoRequests)

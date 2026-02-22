@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { getStore, STORE_CONFIG } from '@/lib/stores'
+import { isFullControl } from '@/lib/roles'
 import { TrafficPanel } from '@/components/traffic/TrafficPanel'
 
 interface TrafficPageProps {
@@ -14,7 +15,7 @@ export default async function TrafficPage({ searchParams }: TrafficPageProps) {
 
   const params = await searchParams
   let storeId: number
-  if (user.role === 'ops') {
+  if (isFullControl({ role: user.role, storeId: user.storeId })) {
     storeId = params.store ? parseInt(params.store) : STORE_CONFIG[0].id
   } else {
     storeId = user.storeId!
