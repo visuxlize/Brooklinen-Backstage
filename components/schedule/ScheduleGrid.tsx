@@ -853,13 +853,13 @@ export function ScheduleGrid({
                   </th>
                 ))}
               </tr>
-              <tr data-row="promotions" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
+              <tr data-row="promotions" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 [&>td]:min-h-[2.75rem] [&>td]:overflow-visible">
                 <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Promotions
                 </td>
                 <td className="px-2 py-1.5 w-14 border-l border-slate-100 dark:border-slate-600/80" />
                 {DAY_KEYS.map((dayKey) => (
-                  <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80">
+                  <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80 min-h-[2.75rem] overflow-visible">
                     {canEdit ? (
                       <input
                         type="text"
@@ -867,21 +867,21 @@ export function ScheduleGrid({
                         onChange={(e) => setPromotions((prev) => ({ ...prev, [dayKey]: e.target.value }))}
                         onBlur={() => saveWeekMeta({ promotions })}
                         placeholder="—"
-                        className="w-full min-w-0 px-2 py-1.5 text-sm text-center border border-transparent rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none"
+                        className="w-full min-w-0 px-2 py-1.5 text-sm text-center border border-transparent rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none min-h-[2rem]"
                       />
                     ) : (
-                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center">{promotions[dayKey]?.trim() || '—'}</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center break-words whitespace-normal overflow-visible min-h-[1.5rem]">{promotions[dayKey]?.trim() || '—'}</span>
                     )}
                   </td>
                 ))}
               </tr>
-              <tr data-row="workload" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
+              <tr data-row="workload" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 [&>td]:min-h-[2.75rem] [&>td]:overflow-visible">
                 <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Workload
                 </td>
                 <td className="px-2 py-1.5 w-14 border-l border-slate-100 dark:border-slate-600/80" />
                 {DAY_KEYS.map((dayKey) => (
-                  <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80">
+                  <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80 min-h-[2.75rem] overflow-visible">
                     {canEdit ? (
                       <input
                         type="text"
@@ -889,10 +889,10 @@ export function ScheduleGrid({
                         onChange={(e) => setWorkload((prev) => ({ ...prev, [dayKey]: e.target.value }))}
                         onBlur={() => saveWeekMeta({ workload })}
                         placeholder="—"
-                        className="w-full min-w-0 px-2 py-1.5 text-sm text-center border border-transparent rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none"
+                        className="w-full min-w-0 px-2 py-1.5 text-sm text-center border border-transparent rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none min-h-[2rem]"
                       />
                     ) : (
-                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center">{workload[dayKey]?.trim() || '—'}</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center break-words whitespace-normal overflow-visible min-h-[1.5rem]">{workload[dayKey]?.trim() || '—'}</span>
                     )}
                   </td>
                 ))}
@@ -970,7 +970,8 @@ export function ScheduleGrid({
                         cellAvail.start != null &&
                         cellAvail.end != null &&
                         !shiftFitsInWindow(cellValue, cellAvail.start, cellAvail.end)
-                      const readOnly = !canEdit || isNa || isOffOrPto
+                      // Only lock when OFF/PTO comes from an approved RTO (shown on RTO page). Manual OFF/PTO stays editable.
+                      const readOnly = !canEdit || isNa || isOffOrPtoFromRequest
                       const window12h =
                         cellAvail?.start != null && cellAvail?.end != null
                           ? `${formatTime24to12(cellAvail.start)} – ${formatTime24to12(cellAvail.end)}`
