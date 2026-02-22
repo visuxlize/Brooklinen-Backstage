@@ -4,7 +4,13 @@ import { useState, useEffect, useRef } from 'react'
 import { TrendingUp, TrendingDown, Clock, Users, Loader2, FileSpreadsheet } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
 import type { StoreConfig } from '@/lib/stores'
-import { findClosestLYWeek } from '@/lib/scheduleHours'
+import {
+  computeFiveWeekProjection,
+  computePeakHoursSummary,
+  formatHour,
+  type WeeklyTrafficRow,
+  type HourlyTrafficRow,
+} from '@/lib/trafficCalculations'
 
 const DAY_HEADERS_LOWER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
@@ -335,56 +341,52 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
     ? Math.max(...DAY_KEYS.map((k) => Number(latest[k] ?? 0)))
     : 0
 
-  // 5-week projection: next 5 Sundays from this week
-  const availableWeeks = weeklyData.map((r) => r.weekStart).sort()
-  const trendMultNum = trendMult ?? 0
-  const fiveWeekStarts: string[] = []
+  // SECTION 1: 5-Week Projection — schedule weeks = next 5 Sundays
   const now = new Date()
   const thisSunday = new Date(now)
   thisSunday.setDate(now.getDate() - now.getDay())
+  const scheduleWeeks: string[] = []
   for (let i = 0; i < 5; i++) {
     const d = new Date(thisSunday)
     d.setDate(thisSunday.getDate() + i * 7)
-    fiveWeekStarts.push(d.toISOString().slice(0, 10))
+    scheduleWeeks.push(d.toISOString().slice(0, 10))
   }
-  const projectionRows = fiveWeekStarts.map((weekStart) => {
-    const lyKey = findClosestLYWeek(weekStart, availableWeeks)
-    const lyRow = weeklyData.find((r) => r.weekStart === lyKey)
-    const lyDays = lyRow
-      ? [Number(lyRow.sun ?? 0), Number(lyRow.mon ?? 0), Number(lyRow.tue ?? 0), Number(lyRow.wed ?? 0), Number(lyRow.thu ?? 0), Number(lyRow.fri ?? 0), Number(lyRow.sat ?? 0)]
-      : [0, 0, 0, 0, 0, 0, 0]
-    const lyTotal = lyDays.reduce((a, b) => a + b, 0)
-    const projected = lyDays.map((t) => Math.max(0, t * (1 + trendMultNum)))
-    const projTotal = projected.reduce((a, b) => a + b, 0)
-    const shares = projTotal > 0 ? projected.map((p) => p / projTotal) : [1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7, 1 / 7]
-    return { weekStart, lyTotal, projTotal, shares }
-  })
+  const weeklyHistory: WeeklyTrafficRow[] = weeklyData.map((r) => ({
+    weekStart: r.weekStart,
+    sun: r.sun,
+    mon: r.mon,
+    tue: r.tue,
+    wed: r.wed,
+    thu: r.thu,
+    fri: r.fri,
+    sat: r.sat,
+    total: r.total,
+    trendMult: r.trendMult,
+    trafficCount: r.trafficCount,
+  }))
+  const trendData = {
+    trendMultiplier: trendMult ?? 0,
+    recentCount: trafficCountNum ?? null,
+  }
+  const projectionRows = computeFiveWeekProjection(weeklyHistory, trendData, scheduleWeeks)
 
-  // Peak traffic hours from hourly data (by dayOfWeek)
-  const fmtHour = (h: number) => (h === 0 ? '12AM' : h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h - 12}PM`)
-  const peakRows = [0, 1, 2, 3, 4, 5, 6].map((dow) => {
-    const byHour = hourlyData
-      .filter((r) => r.dayOfWeek === dow)
-      .map((r) => ({ hour: r.hour, avg: Number(r.avgCount ?? 0) }))
-      .sort((a, b) => b.avg - a.avg)
-    const peak1 = byHour[0] ?? { hour: 12, avg: 0 }
-    const peak2 = byHour[1] ?? { hour: 13, avg: 0 }
-    const slow = byHour[byHour.length - 1] ?? { hour: 20, avg: 0 }
-    const top3 = byHour.slice(0, 3).map((x) => x.hour).sort((a, b) => a - b)
-    const winEnd = top3.length >= 2 ? Math.min((top3[top3.length - 1] ?? 20) + 1, 20) : 20
-    const windowStr = top3.length >= 2 ? `${fmtHour(top3[0])} – ${fmtHour(winEnd)}` : '—'
-    const dayTotal = byHour.reduce((s, x) => s + x.avg, 0)
-    const top3Sum = byHour.slice(0, 3).reduce((s, x) => s + x.avg, 0)
-    const pctOfDay = dayTotal > 0 ? top3Sum / dayTotal : 0
-    return {
-      day: DAYS[dow],
-      peakHour: `${fmtHour(peak1.hour)} (${Math.round(peak1.avg)} avg)`,
-      secondPeak: `${fmtHour(peak2.hour)} (${Math.round(peak2.avg)} avg)`,
-      slowHour: fmtHour(slow.hour),
-      busiestWindow: windowStr,
-      pctOfDay,
-    }
-  })
+  // SECTION 2: Peak Hours Summary — hours 10–20, sort by avgCount, window = top 3, % = sum(top3)/dailyTotal
+  const hourlyRows: HourlyTrafficRow[] = hourlyData.map((r) => ({
+    hour: r.hour,
+    dayOfWeek: r.dayOfWeek,
+    avgCount: r.avgCount != null ? Number(r.avgCount) : null,
+    dailyTotal: r.dailyTotal != null ? Number(r.dailyTotal) : null,
+    pctOfDay: r.pctOfDay != null ? Number(r.pctOfDay) : null,
+  }))
+  const peakResults = computePeakHoursSummary(hourlyRows, DAYS)
+  const peakRows = peakResults.map((p) => ({
+    day: p.dayName,
+    peakHour: `${formatHour(p.peakHour)} (${Math.round(p.peakAvg)} avg)`,
+    secondPeak: `${formatHour(p.secondPeakHour)} (${Math.round(p.secondPeakAvg)} avg)`,
+    slowHour: formatHour(p.slowHour),
+    busiestWindow: `${formatHour(p.busiestWindowStart)} – ${formatHour(p.busiestWindowEnd)}`,
+    pctOfDay: p.windowPctOfDay,
+  }))
 
   function getDefaultWeekStartForRow(rowIndex: number): string {
     const now = new Date()
@@ -642,16 +644,8 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-                    <td className="py-1.5 px-2 text-slate-500 dark:text-slate-400">Week date</td>
-                    {projectionRows.map((r, i) => (
-                      <td key={i} className="py-1.5 px-1 text-center text-slate-700 dark:text-slate-200">
-                        {new Date(r.weekStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-                    ))}
-                  </tr>
                   <tr className="border-b border-slate-100 dark:border-slate-700">
-                    <td className="py-1.5 px-2 text-slate-500 dark:text-slate-400">LY traffic</td>
+                    <td className="py-1.5 px-2 text-slate-500 dark:text-slate-400 font-medium">LY Traffic</td>
                     {projectionRows.map((r, i) => (
                       <td key={i} className="py-1.5 px-1 text-center text-blue-700 dark:text-blue-400 font-medium">
                         {Math.round(r.lyTotal).toLocaleString()}
@@ -659,10 +653,10 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                     ))}
                   </tr>
                   <tr className="border-b border-slate-100 dark:border-slate-700 bg-emerald-50/50 dark:bg-emerald-900/20">
-                    <td className="py-1.5 px-2 text-slate-600 dark:text-slate-300 font-medium">Projected</td>
+                    <td className="py-1.5 px-2 text-slate-600 dark:text-slate-300 font-medium">Projected Traffic</td>
                     {projectionRows.map((r, i) => (
                       <td key={i} className="py-1.5 px-1 text-center font-bold text-emerald-800 dark:text-emerald-300">
-                        {Math.round(r.projTotal).toLocaleString()}
+                        {Math.round(r.projectedTotal).toLocaleString()}
                       </td>
                     ))}
                   </tr>
@@ -671,7 +665,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                       <td className="py-1 px-2 text-slate-500 dark:text-slate-400">{day} %</td>
                       {projectionRows.map((r, i) => (
                         <td key={i} className="py-1 px-1 text-center text-slate-600 dark:text-slate-300">
-                          {(r.shares[d] * 100).toFixed(0)}%
+                          {(r.dayShares[d] * 100).toFixed(0)}%
                         </td>
                       ))}
                     </tr>
@@ -694,7 +688,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
                     <th className="text-left py-2 px-2 text-slate-500 dark:text-slate-400">2nd peak</th>
                     <th className="text-left py-2 px-2 text-slate-500 dark:text-slate-400">Slow hour</th>
                     <th className="text-left py-2 px-2 text-slate-500 dark:text-slate-400">Busiest window</th>
-                    <th className="text-right py-2 px-2 text-slate-500 dark:text-slate-400">% of day</th>
+                    <th className="text-right py-2 px-2 text-slate-500 dark:text-slate-400">% of Daily Traffic</th>
                   </tr>
                 </thead>
                 <tbody>
