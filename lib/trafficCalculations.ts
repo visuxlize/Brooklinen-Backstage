@@ -124,7 +124,7 @@ export type PeakHourRowResult = {
  */
 export function computePeakHoursSummary(
   hourlyTraffic: HourlyTrafficRow[],
-  dayNames: string[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  dayNames: readonly string[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 ): PeakHourRowResult[] {
   const HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
