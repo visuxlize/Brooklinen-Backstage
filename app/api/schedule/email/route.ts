@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isStoreLeader } from '@/lib/roles'
-import { resend } from '@/lib/resend'
+import { getResend } from '@/lib/resend'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { and, eq } from 'drizzle-orm'
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     // Strip the data URL prefix
     const base64Data = imageBase64.replace(/^data:image\/png;base64,/, '')
 
+    const resend = getResend()
     const results = await Promise.allSettled(
       emails.map((email) =>
         resend.emails.send({
@@ -86,6 +87,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input', details: error.errors }, { status: 400 })
+    }
+    if (error instanceof Error && error.message.includes('RESEND_API_KEY')) {
+      return NextResponse.json({ error: 'Email not configured' }, { status: 503 })
     }
     console.error('Schedule email error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

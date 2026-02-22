@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { resend } from '@/lib/resend'
+import { getResend } from '@/lib/resend'
 import { getStore } from '@/lib/stores'
 
 const schema = z.object({
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
         ? `<p style="color: #334155;"><strong>Note from your leader:</strong> ${leaderNote}</p>`
         : ''
 
+    const resend = getResend()
     await resend.emails.send({
       from: 'Brooklinen Retail Ops <scheduling@brooklinen.com>',
       to: employeeEmail,
@@ -63,6 +64,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+    }
+    if (error instanceof Error && error.message.includes('RESEND_API_KEY')) {
+      return NextResponse.json({ error: 'Email not configured' }, { status: 503 })
     }
     console.error('RTO email error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
