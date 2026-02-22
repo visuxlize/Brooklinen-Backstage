@@ -16,12 +16,15 @@ interface RTOSubmitFormProps {
   defaultStoreId?: number
 }
 
+const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+
 export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
   const [form, setForm] = useState({
     employeeName: '',
     storeId: defaultStoreId ?? STORE_CONFIG[0].id,
     type: 'RTO' as RequestType,
-    requestedDays: '',
+    startDate: '',
+    endDate: '',
     partialStart: '',
     partialEnd: '',
     employeeEmail: '',
@@ -36,6 +39,14 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!form.startDate || !form.endDate) {
+      setError('Please select a start and end date.')
+      return
+    }
+    if (form.endDate < form.startDate) {
+      setError('End date must be on or after start date.')
+      return
+    }
     if (isPartial && (!form.partialStart.trim() || !form.partialEnd.trim())) {
       setError('Partial Time Off requires both start and end times.')
       return
@@ -51,7 +62,8 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
           storeId: form.storeId,
           employeeName: form.employeeName,
           employeeEmail: form.employeeEmail,
-          requestedDays: form.requestedDays,
+          startDate: form.startDate,
+          endDate: form.endDate,
           type: form.type,
           partialTime: isPartial ? partialTimeDisplay : undefined,
           note: form.note || undefined,
@@ -70,7 +82,8 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
           employeeName: '',
           storeId: defaultStoreId ?? STORE_CONFIG[0].id,
           type: 'RTO',
-          requestedDays: '',
+          startDate: '',
+          endDate: '',
           partialStart: '',
           partialEnd: '',
           employeeEmail: '',
@@ -101,7 +114,7 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 text-sm px-4 py-3 rounded-xl">
           {error}
         </div>
       )}
@@ -163,22 +176,48 @@ export function RTOSubmitForm({ defaultStoreId }: RTOSubmitFormProps) {
         </div>
       </div>
 
-      {/* Requested days */}
-      <div>
-        <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block mb-1.5">
+      {/* Date period — drives schedule when approved (RTO=OFF, PTO=PTO, Partial=partial) */}
+      <div className="space-y-3">
+        <label className="text-xs font-semibold uppercase tracking-widest text-slate-400 block">
           <span className="flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5" />
-            Requested Days
+            Date period
           </span>
         </label>
-        <input
-          type="text"
-          required
-          value={form.requestedDays}
-          onChange={(e) => setForm({ ...form, requestedDays: e.target.value })}
-          placeholder="e.g. Mar 15  or  Mar 22–23"
-          className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder-slate-400 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
-        />
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Select the first and last day you need off. After approval, this will show on the schedule (OFF for RTO, PTO for PTO, or your partial window for Partial).
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Start date</span>
+            <input
+              type="date"
+              required
+              min={today}
+              value={form.startDate}
+              onChange={(e) => {
+                const v = e.target.value
+                setForm((prev) => ({
+                  ...prev,
+                  startDate: v,
+                  endDate: prev.endDate && prev.endDate < v ? v : prev.endDate,
+                }))
+              }}
+              className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
+            />
+          </div>
+          <div>
+            <span className="text-xs text-slate-500 dark:text-slate-400 block mb-1">End date</span>
+            <input
+              type="date"
+              required
+              min={form.startDate || today}
+              value={form.endDate}
+              onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+              className="border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-navy)] w-full"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Partial time: required when type is Partial */}

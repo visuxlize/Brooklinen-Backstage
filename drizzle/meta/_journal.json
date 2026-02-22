@@ -71,6 +71,13 @@
       "when": 1771706779026,
       "tag": "0009_nifty_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1771782063713,
+      "tag": "0010_pale_punisher",
+      "breakpoints": true
     }
   ]
 }

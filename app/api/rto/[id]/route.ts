@@ -60,6 +60,8 @@ export async function PATCH(
           requestedDays: existing.requestedDays,
           type: existing.type,
           partialTime: existing.partialTime,
+          startDate: existing.startDate ?? undefined,
+          endDate: existing.endDate ?? undefined,
         })
       } catch (e) {
         console.error('Failed to sync RTO approval to availability/schedule:', e)

@@ -10,13 +10,17 @@ const postSchema = z.object({
   storeId: z.number().int(),
   employeeName: z.string().min(1),
   employeeEmail: z.string().email(),
-  requestedDays: z.string().min(1),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   type: z.enum(['RTO', 'PTO', 'Partial']),
   partialTime: z.string().optional(),
   note: z.string().optional(),
 }).refine((data) => data.type !== 'Partial' || (data.partialTime && data.partialTime.trim().length > 0), {
   message: 'Partial Time Off requires start and end times',
   path: ['partialTime'],
+}).refine((data) => data.startDate <= data.endDate, {
+  message: 'End date must be on or after start date',
+  path: ['endDate'],
 })
 
 export async function GET(request: Request) {
@@ -46,11 +50,28 @@ export async function GET(request: Request) {
   return NextResponse.json({ data })
 }
 
+/** Format date range for display (e.g. "Mar 8 – Mar 14, 2026"). */
+function formatRequestedDaysDisplay(startDate: string, endDate: string): string {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${startDate} – ${endDate}`
+  const sameYear = start.getFullYear() === end.getFullYear()
+  const sameMonth = sameYear && start.getMonth() === end.getMonth()
+  const fmtShort = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+  const fmtYear = new Intl.DateTimeFormat('en-US', { year: 'numeric' })
+  if (startDate === endDate) return `${fmtShort.format(start)}, ${fmtYear.format(start)}`
+  if (sameMonth) return `${fmtShort.format(start)} ${start.getDate()} – ${end.getDate()}, ${fmtYear.format(end)}`
+  if (sameYear) return `${fmtShort.format(start)} ${start.getDate()} – ${fmtShort.format(end)} ${end.getDate()}, ${fmtYear.format(end)}`
+  return `${fmtShort.format(start)} ${start.getDate()}, ${fmtYear.format(start)} – ${fmtShort.format(end)} ${end.getDate()}, ${fmtYear.format(end)}`
+}
+
 export async function POST(request: Request) {
   // Public — no auth required
   try {
     const body = await request.json()
     const validated = postSchema.parse(body)
+
+    const requestedDaysDisplay = formatRequestedDaysDisplay(validated.startDate, validated.endDate)
 
     const [inserted] = await db
       .insert(rtoRequests)
@@ -58,7 +79,9 @@ export async function POST(request: Request) {
         storeId: validated.storeId,
         employeeName: validated.employeeName,
         employeeEmail: validated.employeeEmail,
-        requestedDays: validated.requestedDays,
+        requestedDays: requestedDaysDisplay,
+        startDate: validated.startDate,
+        endDate: validated.endDate,
         type: validated.type,
         partialTime: validated.partialTime ?? null,
         note: validated.note ?? null,

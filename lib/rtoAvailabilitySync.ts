@@ -110,6 +110,28 @@ export function parseRequestedDays(
 }
 
 /**
+ * Build date infos from a start/end date period (inclusive). Used when request has startDate/endDate.
+ */
+export function dateRangeToDateInfos(
+  startDate: string,
+  endDate: string
+): { dateStr: string; weekStart: string; dayOfWeek: number }[] {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return []
+  const out: { dateStr: string; weekStart: string; dayOfWeek: number }[] = []
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const date = new Date(d)
+    out.push({
+      dateStr: format(date, 'yyyy-MM-dd'),
+      weekStart: format(startOfWeek(date, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+      dayOfWeek: getDay(date),
+    })
+  }
+  return out
+}
+
+/**
  * When an RTO request is approved: update availability and schedule so the schedule reflects it.
  * - RTO → availability OFF (na), schedule cell OFF
  * - PTO → availability OFF (na), schedule cell PTO
@@ -123,6 +145,8 @@ export async function applyRtoApprovalToAvailabilityAndSchedule(
     requestedDays: string
     type: string
     partialTime: string | null
+    startDate?: string | null
+    endDate?: string | null
   }
 ): Promise<void> {
   const [dbUser] = await db
@@ -138,7 +162,10 @@ export async function applyRtoApprovalToAvailabilityAndSchedule(
 
   if (!dbUser) return // no user in system for this email/store; skip sync
 
-  const dateInfos = parseRequestedDays(request.requestedDays)
+  const dateInfos =
+    request.startDate && request.endDate
+      ? dateRangeToDateInfos(request.startDate, request.endDate)
+      : parseRequestedDays(request.requestedDays)
   if (dateInfos.length === 0) return
 
   const type = request.type.toUpperCase()

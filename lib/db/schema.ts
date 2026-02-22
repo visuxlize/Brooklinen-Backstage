@@ -90,8 +90,10 @@ export const rtoRequests = pgTable('rto_requests', {
   storeId: integer('store_id').notNull().references(() => stores.id),
   employeeName: text('employee_name').notNull(),
   employeeEmail: text('employee_email').notNull(),
-  requestedDays: text('requested_days').notNull(),
-  type: text('type').notNull(), // "RTO" | "PTO" | "COMP" | "Sick"
+  requestedDays: text('requested_days').notNull(), // human-readable for display (e.g. "Mar 8 – Mar 14, 2026")
+  startDate: date('start_date'), // date period start (drives schedule when approved)
+  endDate: date('end_date'), // date period end (inclusive)
+  type: text('type').notNull(), // "RTO" | "PTO" | "Partial" | "COMP" | "Sick"
   partialTime: text('partial_time'),
   note: text('note'),
   status: text('status').notNull().default('pending'), // "pending" | "approved" | "denied"
