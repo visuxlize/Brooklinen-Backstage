@@ -449,7 +449,7 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
       const ab = await file.arrayBuffer()
       const wb = XLSX.read(ab, { type: 'array', cellDates: true })
 
-      const parsed = parseTrafficExcel(wb, XLSX.utils)
+      const parsed = parseTrafficExcel(wb, XLSX.utils as { sheet_to_json: (sheet: unknown, opts: { header: number; defval: unknown }) => (unknown)[][] })
       if (parsed) {
         if (!storeNameMatches(parsed.storeName, store.id, store.name)) {
           setExcelError(`This file is for "${parsed.storeName}". Upload a file for ${store.name} (e.g. Retail_Traffic_Data_Pulls_${store.name.replace(/\s+/g, '_')}.xlsx).`)
