@@ -308,8 +308,32 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
 
   const [hourlyData, setHourlyData] = useState<Array<{ hour: number; dayOfWeek: number; avgCount: string | null; dailyTotal: string | null; pctOfDay: string | null }>>([])
 
+  const STORAGE_KEY = `traffic-upload-${store.id}`
+
   useEffect(() => {
-    setUploadResult(null)
+    try {
+      const raw = typeof window !== 'undefined' ? sessionStorage.getItem(STORAGE_KEY) : null
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          'trendMultiplier' in parsed &&
+          'peakHours' in parsed &&
+          Array.isArray((parsed as TrafficUploadResult).peakHours) &&
+          'historyTable' in parsed &&
+          Array.isArray((parsed as TrafficUploadResult).historyTable)
+        ) {
+          setUploadResult(parsed as TrafficUploadResult)
+        } else {
+          setUploadResult(null)
+        }
+      } else {
+        setUploadResult(null)
+      }
+    } catch {
+      setUploadResult(null)
+    }
     async function fetchData() {
       setLoading(true)
       try {
@@ -457,6 +481,11 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
         }
         const result = buildUploadResult(parsed)
         setUploadResult(result)
+        try {
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(result))
+        } catch {
+          // ignore storage errors
+        }
 
         const weeks = result.historyTable.map((row) => {
           const [sun, mon, tue, wed, thu, fri, sat] = row.days
@@ -480,6 +509,12 @@ export function TrafficPanel({ store }: TrafficPanelProps) {
           body: JSON.stringify({ storeId: store.id, weeks }),
         })
         if (res.ok) {
+          const peakWindowByDay = result.peakHours.map((r) => r.busyWindow)
+          await fetch('/api/traffic/peak-hours', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storeId: store.id, peakWindowByDay }),
+          })
           const fetchRes = await fetch(`/api/traffic?storeId=${store.id}&_=${Date.now()}`, { cache: 'no-store' })
           if (fetchRes.ok) {
             const { weekly, hourly } = await fetchRes.json()

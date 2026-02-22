@@ -11,6 +11,7 @@ import {
   getPlusMinusColor,
 } from '@/lib/daily-ops/formatters'
 import { STORE_CONFIG } from '@/lib/stores'
+import type { DailyOpsActuals } from '@/lib/daily-ops/types'
 
 const WEATHER_OPTIONS = [
   { value: '', label: '— Select —', bg: 'bg-slate-50 dark:bg-slate-800' },
@@ -132,13 +133,14 @@ export function NightlyRecapPanel() {
       // Temporarily expand container to full content width so table/inputs don't clip
       savedStyles.push({ el, minWidth: el.style.minWidth })
       el.style.minWidth = `${el.scrollWidth}px`
-      // Expand all textareas to full content height so no vertical clipping
+      // Expand all textareas to full content height so no vertical clipping when saving screenshot
       const textareas = el.querySelectorAll('textarea')
       textareas.forEach((ta) => {
-        textareaHeights.push({ el: ta, height: ta.style.height })
-        ta.style.overflow = 'hidden'
-        ta.style.height = '0'
-        ta.style.height = `${Math.max(ta.scrollHeight, 60)}px`
+        textareaHeights.push({ el: ta as HTMLTextAreaElement, height: (ta as HTMLTextAreaElement).style.height })
+        ;(ta as HTMLTextAreaElement).style.overflow = 'visible'
+        ;(ta as HTMLTextAreaElement).style.minHeight = `${Math.max((ta as HTMLTextAreaElement).scrollHeight, 60)}px`
+        ;(ta as HTMLTextAreaElement).style.height = 'auto'
+        ;(ta as HTMLTextAreaElement).style.height = `${Math.max((ta as HTMLTextAreaElement).scrollHeight, 60)}px`
       })
       // Let layout settle
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
@@ -161,13 +163,13 @@ export function NightlyRecapPanel() {
       link.click()
     } finally {
       savedStyles.forEach(({ el: e, minWidth }) => { e.style.minWidth = minWidth })
-      textareaHeights.forEach(({ el: ta, height }) => { ta.style.height = height; ta.style.overflow = '' })
+      textareaHeights.forEach(({ el: ta, height }) => { ta.style.height = height; ta.style.minHeight = ''; ta.style.overflow = '' })
       setSavingImage(false)
     }
   }
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4 max-w-4xl mx-auto">
       <div className="flex justify-end">
         <button
           type="button"
@@ -178,8 +180,8 @@ export function NightlyRecapPanel() {
           {savingImage ? 'Saving…' : 'Save as image (for email)'}
         </button>
       </div>
-      <div ref={recapRef} className="space-y-6 overflow-x-auto bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-600">
-      <div className="flex flex-col gap-4">
+      <div ref={recapRef} className="space-y-6 overflow-x-auto overflow-y-visible bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-600">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-4 text-center sm:text-left">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Store</p>
           <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{storeName}</p>
@@ -188,7 +190,7 @@ export function NightlyRecapPanel() {
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Date</p>
           <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{selectedDate}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Weather</label>
             <select
@@ -258,51 +260,50 @@ export function NightlyRecapPanel() {
             <td className="py-2 pr-4 font-medium text-slate-600 dark:text-slate-300">Actual Sales</td>
             {COLS.map((c) => {
               const isComputed = c.key === 'aov' || c.key === 'cvr'
+              const isCurrency = c.key === 'netRevenue' || c.key === 'returns'
               const val = actualDisplay[c.key as keyof typeof actualDisplay] ?? null
               return (
                 <td key={c.key} className="text-center py-1 px-2">
                   {isComputed ? (
                     <span className="text-slate-700 dark:text-slate-200">{formatVal(c.key, val)}</span>
-                  ) : (
-                    c.key === 'returns' ? (
-                      <div className="flex items-center justify-center gap-0.5">
-                        <span className="text-slate-500 dark:text-slate-400 text-sm">$</span>
-                        <input
-                          type="number"
-                          step={1}
-                          min={0}
-                          placeholder="0"
-                          value={actuals.returns ?? ''}
-                          onChange={(e) => {
-                            const raw = e.target.value
-                            if (raw === '') {
-                              setActual('returns', null)
-                              return
-                            }
-                            const n = Number(raw)
-                            if (!Number.isNaN(n)) setActual('returns', n)
-                          }}
-                          className="w-full min-w-[4rem] max-w-[100px] px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
-                        />
-                      </div>
-                    ) : (
+                  ) : isCurrency ? (
+                    <div className="flex items-center justify-center gap-0.5">
+                      <span className="text-slate-500 dark:text-slate-400 text-sm shrink-0">$</span>
                       <input
                         type="number"
-                        step={c.key === 'upt' ? 0.1 : 1}
-                        placeholder="—"
-                        value={(c.key !== 'aov' && c.key !== 'cvr' ? actuals[c.key] : undefined) ?? ''}
+                        step={c.key === 'netRevenue' ? 1 : 1}
+                        min={0}
+                        placeholder={c.key === 'returns' ? '0' : '—'}
+                        value={(c.key === 'netRevenue' ? actuals.netRevenue : actuals.returns) ?? ''}
                         onChange={(e) => {
                           const raw = e.target.value
                           if (raw === '') {
-                            if (c.key !== 'aov' && c.key !== 'cvr') setActual(c.key, null)
+                            setActual(c.key as 'netRevenue' | 'returns', null)
                             return
                           }
                           const n = Number(raw)
-                          if (!Number.isNaN(n) && c.key !== 'aov' && c.key !== 'cvr') setActual(c.key, n)
+                          if (!Number.isNaN(n)) setActual(c.key as 'netRevenue' | 'returns', n)
                         }}
-                        className="w-full min-w-[3rem] max-w-[120px] mx-auto px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                        className="w-full min-w-[4rem] max-w-[100px] px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
                       />
-                    )
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      step={c.key === 'upt' ? 0.1 : 1}
+                      placeholder="—"
+                      value={(c.key !== 'aov' && c.key !== 'cvr' ? actuals[c.key as keyof typeof actuals] : undefined) ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        if (raw === '') {
+                          if (c.key !== 'aov' && c.key !== 'cvr') setActual(c.key as keyof DailyOpsActuals, null)
+                          return
+                        }
+                        const n = Number(raw)
+                        if (!Number.isNaN(n) && c.key !== 'aov' && c.key !== 'cvr') setActual(c.key as keyof DailyOpsActuals, n)
+                      }}
+                      className="w-full min-w-[3rem] max-w-[120px] mx-auto px-2 py-1 text-center text-sm border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"
+                    />
                   )}
                 </td>
               )
@@ -341,7 +342,7 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('overallSales', e.target.value)}
             placeholder="e.g. Slow day due to internet outages..."
             rows={4}
-            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y"
+            className="w-full min-h-[100px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
           />
         </section>
         <section>
@@ -356,7 +357,7 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('traffic', e.target.value)}
             placeholder="e.g. Traffic mainly for TOs and walk-ins..."
             rows={3}
-            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y"
+            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
           />
         </section>
         <section>
@@ -371,7 +372,7 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('conversion', e.target.value)}
             placeholder="..."
             rows={3}
-            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y"
+            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
           />
         </section>
         <section>
@@ -386,7 +387,7 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('promotionPerformance', e.target.value)}
             placeholder="..."
             rows={3}
-            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y"
+            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
           />
         </section>
         <section>
@@ -401,7 +402,7 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('retailOpsAlerts', e.target.value)}
             placeholder="..."
             rows={3}
-            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y"
+            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
           />
         </section>
         <section>
@@ -416,7 +417,7 @@ export function NightlyRecapPanel() {
             onChange={(e) => setRecapNote('storeClosingNotes', e.target.value)}
             placeholder="..."
             rows={3}
-            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y"
+            className="w-full min-h-[80px] px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-b-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-y overflow-y-auto"
           />
         </section>
       </div>

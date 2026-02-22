@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { schedules, retailData, trafficWeekly, hourlyTraffic, scheduleWeekMeta, stores } from '@/lib/db/schema'
+import { schedules, retailData, trafficWeekly, hourlyTraffic, storeTrafficPeak, scheduleWeekMeta, stores } from '@/lib/db/schema'
 import { and, eq, gte, lte, desc } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isStoreLeader, isFullControl } from '@/lib/roles'
@@ -143,27 +143,37 @@ export async function GET(request: Request) {
     trendMult
   )
 
-  // Peak window per day from hourly traffic (busiest 3-hour window)
-  const hourlyRows = await db
-    .select({ hour: hourlyTraffic.hour, dayOfWeek: hourlyTraffic.dayOfWeek, avgCount: hourlyTraffic.avgCount })
-    .from(hourlyTraffic)
-    .where(eq(hourlyTraffic.storeId, storeId))
-  const peakWindowByDay: string[] = ['—', '—', '—', '—', '—', '—', '—']
-  for (let dow = 0; dow < 7; dow++) {
-    const byHour = hourlyRows
-      .filter((r) => r.dayOfWeek === dow)
-      .map((r) => ({ hour: r.hour, avg: Number(r.avgCount ?? 0) }))
-      .sort((a, b) => b.avg - a.avg)
-    const top3 = byHour.slice(0, 3).map((x) => x.hour).sort((a, b) => a - b)
-    if (top3.length >= 2) {
-      const fmt = (h: number) => {
-        if (h === 0) return '12AM'
-        if (h < 12) return `${h}AM`
-        if (h === 12) return '12PM'
-        return `${h - 12}PM`
+  // Peak window per day: prefer stored (from traffic Excel upload), else compute from hourly traffic
+  let peakWindowByDay: string[] = ['—', '—', '—', '—', '—', '—', '—']
+  const [storedPeakRow] = await db
+    .select({ peakWindowByDay: storeTrafficPeak.peakWindowByDay })
+    .from(storeTrafficPeak)
+    .where(eq(storeTrafficPeak.storeId, storeId))
+    .limit(1)
+  const storedPeak = storedPeakRow?.peakWindowByDay
+  if (Array.isArray(storedPeak) && storedPeak.length === 7 && storedPeak.every((x) => typeof x === 'string')) {
+    peakWindowByDay = storedPeak as string[]
+  } else {
+    const hourlyRows = await db
+      .select({ hour: hourlyTraffic.hour, dayOfWeek: hourlyTraffic.dayOfWeek, avgCount: hourlyTraffic.avgCount })
+      .from(hourlyTraffic)
+      .where(eq(hourlyTraffic.storeId, storeId))
+    for (let dow = 0; dow < 7; dow++) {
+      const byHour = hourlyRows
+        .filter((r) => r.dayOfWeek === dow)
+        .map((r) => ({ hour: r.hour, avg: Number(r.avgCount ?? 0) }))
+        .sort((a, b) => b.avg - a.avg)
+      const top3 = byHour.slice(0, 3).map((x) => x.hour).sort((a, b) => a - b)
+      if (top3.length >= 2) {
+        const fmt = (h: number) => {
+          if (h === 0) return '12AM'
+          if (h < 12) return `${h}AM`
+          if (h === 12) return '12PM'
+          return `${h - 12}PM`
+        }
+        const endH = Math.min((top3[top3.length - 1] ?? 20) + 1, 20)
+        peakWindowByDay[dow] = `${fmt(top3[0])} – ${fmt(endH)}`
       }
-      const endH = Math.min((top3[top3.length - 1] ?? 20) + 1, 20)
-      peakWindowByDay[dow] = `${fmt(top3[0])} – ${fmt(endH)}`
     }
   }
 

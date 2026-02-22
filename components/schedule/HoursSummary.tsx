@@ -68,6 +68,25 @@ export function HoursSummary({
           ))}
         </tr>
       )}
+      {peakWindowByDay != null && peakWindowByDay.some((w) => w && w !== '—') && (
+        <tr className="bg-gradient-to-r from-amber-500/15 to-orange-500/15 dark:from-amber-500/20 dark:to-orange-500/20 border-b-2 border-amber-400/30 dark:border-amber-400/40">
+          <td className="px-4 py-2.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400/40 dark:bg-amber-500/30 text-amber-700 dark:text-amber-300" aria-hidden>⚡</span>
+              Power Hour
+            </span>
+            <span className="block text-[10px] font-normal text-amber-700/90 dark:text-amber-300/90 mt-0.5">Busiest window each day</span>
+          </td>
+          <td className="px-2 py-2.5 w-14 text-center text-xs font-medium text-amber-800 dark:text-amber-200">—</td>
+          {DAY_KEYS.map((day) => (
+            <td key={day} className="px-2 py-2.5 text-center">
+              <span className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+                {peakWindowByDay[day] && peakWindowByDay[day] !== '—' ? peakWindowByDay[day] : '—'}
+              </span>
+            </td>
+          ))}
+        </tr>
+      )}
       <tr className="bg-[var(--brand-navy)] text-white border-t-0">
         <td className="px-4 py-3 rounded-bl-lg">
           <span className="text-xs font-semibold uppercase tracking-widest text-white/80">Actual Hours</span>

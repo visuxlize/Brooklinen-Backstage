@@ -75,7 +75,6 @@ export interface DailyOpsActuals {
 }
 
 export interface WakeupLinks {
-  schedule: { url: string; label: string }
   cashlog: { url: string; label: string }
   returns: { url: string; label: string }
 }
@@ -113,7 +112,6 @@ export const EMPTY_ACTUALS: DailyOpsActuals = {
 }
 
 export const EMPTY_WAKEUP_LINKS: WakeupLinks = {
-  schedule: { url: '', label: 'Schedule' },
   cashlog: { url: '', label: 'Cashlog' },
   returns: { url: '', label: 'Returns Tracker' },
 }

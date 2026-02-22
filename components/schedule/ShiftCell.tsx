@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Palmtree, RefreshCw, Thermometer, X, Check } from 'lucide-react'
+import { Palmtree, RefreshCw, Thermometer, X, Copy, ClipboardPaste } from 'lucide-react'
 import { getShiftType, SHIFT_TYPES, normalizeShiftDisplay } from '@/lib/shiftUtils'
 import { cn } from '@/lib/utils'
 
@@ -12,14 +12,32 @@ const QUICK_SET_ICONS = {
   OFF: X,
 } as const
 
+export type CopySource = { employeeName: string; dayOfWeek: number } | null
+
 interface ShiftCellProps {
   value: string | null | undefined
   onChange: (val: string) => void
   readOnly: boolean
   storeColor: string
+  /** When set, Quick Set shows Copy/Paste. Used for schedule grid cells only. */
+  copySource?: CopySource
+  onSetCopySource?: (employeeName: string, dayOfWeek: number) => void
+  onPaste?: (employeeName: string, dayOfWeek: number) => void
+  employeeName?: string
+  dayOfWeek?: number
 }
 
-export function ShiftCell({ value, onChange, readOnly, storeColor }: ShiftCellProps) {
+export function ShiftCell({
+  value,
+  onChange,
+  readOnly,
+  storeColor,
+  copySource,
+  onSetCopySource,
+  onPaste,
+  employeeName,
+  dayOfWeek,
+}: ShiftCellProps) {
   const [editing, setEditing] = useState(false)
   const [inputVal, setInputVal] = useState(value ?? '')
   const [showPopover, setShowPopover] = useState(false)
@@ -61,6 +79,7 @@ export function ShiftCell({ value, onChange, readOnly, storeColor }: ShiftCellPr
   function handleContextMenu(e: React.MouseEvent) {
     if (readOnly) return
     e.preventDefault()
+    e.stopPropagation()
     setShowPopover(true)
   }
 
@@ -129,6 +148,36 @@ export function ShiftCell({ value, onChange, readOnly, storeColor }: ShiftCellPr
               Quick Set
             </div>
             <div className="flex flex-col gap-1">
+              {typeof employeeName === 'string' && typeof dayOfWeek === 'number' && onSetCopySource && onPaste && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSetCopySource(employeeName, dayOfWeek)
+                      setShowPopover(false)
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Set as copy
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!copySource || (copySource.employeeName === employeeName && copySource.dayOfWeek === dayOfWeek)}
+                    onClick={() => {
+                      if (copySource && (copySource.employeeName !== employeeName || copySource.dayOfWeek !== dayOfWeek)) {
+                        onPaste(employeeName, dayOfWeek)
+                        setShowPopover(false)
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ClipboardPaste className="w-3 h-3" />
+                    Paste
+                  </button>
+                  <div className="border-t border-slate-100 dark:border-slate-600 my-1" />
+                </>
+              )}
               {(Object.keys(QUICK_SET_ICONS) as Array<keyof typeof QUICK_SET_ICONS>).map((key) => {
                 const type = SHIFT_TYPES[key]
                 const Icon = QUICK_SET_ICONS[key]

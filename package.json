@@ -13,6 +13,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "dotenv -e .env.local -- tsx lib/seed.ts",
+    "db:create-peak-table": "dotenv -e .env.local -- tsx scripts/create-store-traffic-peak.ts",
     "import:excel": "dotenv -e .env.local -- tsx scripts/import-retail-from-excel.ts"
   },
   "dependencies": {

@@ -6,6 +6,7 @@ import { EMPTY_ACTUALS, EMPTY_SLOTS, EMPTY_WAKEUP_LINKS, EMPTY_RECAP_NOTES } fro
 import { allowedStoreIds as getAllowedStoreIds } from '@/lib/roles'
 
 const ALL_STORE_IDS = [101, 102, 103, 104, 105, 107, 108, 109]
+const DAILY_OPS_STORAGE_PREFIX = 'daily-ops-'
 
 export interface DailyOpsUser {
   role: string
@@ -84,6 +85,70 @@ export function DailyOpsProvider({ children, currentUser = null }: DailyOpsProvi
       return { ...s, selectedStore: defaultId != null ? String(defaultId) : null }
     })
   }, [currentUser, allowedStoreIds])
+
+  useEffect(() => {
+    setState((s) => {
+      if (s.selectedStore == null || s.selectedDate != null) return s
+      const today = new Date().toISOString().slice(0, 10)
+      return { ...s, selectedDate: today }
+    })
+  }, [state.selectedStore])
+
+  const storageKey = state.selectedStore && state.selectedDate ? `${DAILY_OPS_STORAGE_PREFIX}${state.selectedStore}-${state.selectedDate}` : null
+
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem(storageKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Partial<DailyOpsState>
+      setState((s) => ({
+        ...s,
+        employees: Array.isArray(parsed.employees) && parsed.employees.length > 0 ? parsed.employees : s.employees,
+        actuals: parsed.actuals && typeof parsed.actuals === 'object' ? { ...EMPTY_ACTUALS, ...parsed.actuals } : s.actuals,
+        wakeupLinks: parsed.wakeupLinks && typeof parsed.wakeupLinks === 'object' ? { ...EMPTY_WAKEUP_LINKS, ...parsed.wakeupLinks } : s.wakeupLinks,
+        recapWeather: typeof parsed.recapWeather === 'string' ? parsed.recapWeather : s.recapWeather,
+        recapInStoreEvent: typeof parsed.recapInStoreEvent === 'string' ? parsed.recapInStoreEvent : s.recapInStoreEvent,
+        recapNotes: parsed.recapNotes && typeof parsed.recapNotes === 'object' ? { ...EMPTY_RECAP_NOTES, ...parsed.recapNotes } : s.recapNotes,
+        runningWtd: typeof parsed.runningWtd === 'string' ? parsed.runningWtd : s.runningWtd,
+        runningMtd: typeof parsed.runningMtd === 'string' ? parsed.runningMtd : s.runningMtd,
+        runningQtd: typeof parsed.runningQtd === 'string' ? parsed.runningQtd : s.runningQtd,
+      }))
+    } catch {
+      // ignore invalid stored data
+    }
+  }, [storageKey])
+
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return
+    try {
+      const payload = {
+        employees: state.employees,
+        actuals: state.actuals,
+        wakeupLinks: state.wakeupLinks,
+        recapWeather: state.recapWeather,
+        recapInStoreEvent: state.recapInStoreEvent,
+        recapNotes: state.recapNotes,
+        runningWtd: state.runningWtd,
+        runningMtd: state.runningMtd,
+        runningQtd: state.runningQtd,
+      }
+      window.localStorage.setItem(storageKey, JSON.stringify(payload))
+    } catch {
+      // ignore quota errors
+    }
+  }, [
+    storageKey,
+    state.employees,
+    state.actuals,
+    state.wakeupLinks,
+    state.recapWeather,
+    state.recapInStoreEvent,
+    state.recapNotes,
+    state.runningWtd,
+    state.runningMtd,
+    state.runningQtd,
+  ])
 
   const setSelectedStore = useCallback((selectedStore: string | null) => {
     setState((s) => ({ ...s, selectedStore, retailData: null }))

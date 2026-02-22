@@ -181,7 +181,7 @@ export function ScheduleGrid({
         }
         if (availabilityRes.ok) {
           const av = await availabilityRes.json()
-          setWeekAvailability(av.weekAvailability ?? null)
+          setWeekAvailability(typeof av.weekAvailability === 'object' && av.weekAvailability !== null ? av.weekAvailability : null)
         } else {
           setWeekAvailability(null)
         }
@@ -835,6 +835,11 @@ export function ScheduleGrid({
                               onChange={(val) => handleCellChange(emp, day, val)}
                               readOnly={readOnly || !!coverageAwayHere}
                               storeColor={store.color}
+                              copySource={canEdit ? copySource : undefined}
+                              onSetCopySource={canEdit ? (empName, dayOfWeek) => setCopySource({ employeeName: empName, dayOfWeek }) : undefined}
+                              onPaste={canEdit ? (empName, dayOfWeek) => handleCellClickForCopy(empName, dayOfWeek) : undefined}
+                              employeeName={emp}
+                              dayOfWeek={day}
                             />
                           </div>
                         </td>

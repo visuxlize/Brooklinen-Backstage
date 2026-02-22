@@ -89,6 +89,12 @@ export const hourlyTraffic = pgTable('hourly_traffic', {
   pctOfMax: numeric('pct_of_max', { precision: 5, scale: 4 }),
 })
 
+/** Peak traffic window per day (Sun–Sat) from uploaded traffic Excel; used for Power Hour on schedule. */
+export const storeTrafficPeak = pgTable('store_traffic_peak', {
+  storeId: integer('store_id').primaryKey().references(() => stores.id),
+  peakWindowByDay: jsonb('peak_window_by_day').notNull(), // string[7], 0=Sun..6=Sat
+})
+
 export const rtoRequests = pgTable('rto_requests', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   storeId: integer('store_id').notNull().references(() => stores.id),

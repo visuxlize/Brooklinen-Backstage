@@ -126,8 +126,8 @@ export async function GET(request: Request) {
     }
   }
 
-  if (weekAvailability != null) return NextResponse.json({ data: rows, weekAvailability })
-  return NextResponse.json({ data: rows })
+  const out: Record<string, Record<number, { type: string; start?: string; end?: string }>> = weekAvailability ?? {}
+  return NextResponse.json({ data: rows, weekAvailability: out })
 }
 
 /** POST /api/availability — create or update availability (upsert by storeId + userId + effectiveDate). */

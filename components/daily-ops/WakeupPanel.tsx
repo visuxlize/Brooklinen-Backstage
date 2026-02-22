@@ -64,26 +64,24 @@ export function WakeupPanel() {
             />
           </div>
           {selectedStore && selectedDate && (
-            <div className="w-full sm:w-auto sm:min-w-[320px]">
+            <div className="w-full sm:w-auto sm:min-w-[360px]">
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Links</p>
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-slate-600 dark:text-slate-400 text-sm w-20 shrink-0">Schedule</span>
-                  <input type="url" placeholder="URL" value={wakeupLinks.schedule.url} onChange={(e) => setWakeupLinks('schedule', { ...wakeupLinks.schedule, url: e.target.value })} className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
-                  <input type="text" placeholder="Name" value={wakeupLinks.schedule.label} onChange={(e) => setWakeupLinks('schedule', { ...wakeupLinks.schedule, label: e.target.value })} className="w-28 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
-                  {wakeupLinks.schedule.url && <a href={wakeupLinks.schedule.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline text-sm shrink-0">{wakeupLinks.schedule.label || 'Open'}</a>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/50">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Cashlog</label>
+                  <input type="url" placeholder="Paste URL" value={wakeupLinks.cashlog.url} onChange={(e) => setWakeupLinks('cashlog', { ...wakeupLinks.cashlog, url: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
+                  <div className="flex items-center gap-2">
+                    <input type="text" placeholder="Label" value={wakeupLinks.cashlog.label} onChange={(e) => setWakeupLinks('cashlog', { ...wakeupLinks.cashlog, label: e.target.value })} className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
+                    {wakeupLinks.cashlog.url && <a href={wakeupLinks.cashlog.url} target="_blank" rel="noopener noreferrer" className="shrink-0 px-2 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline rounded-md border border-slate-200 dark:border-slate-600">{wakeupLinks.cashlog.label || 'Open'}</a>}
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-slate-600 dark:text-slate-400 text-sm w-20 shrink-0">Cashlog</span>
-                  <input type="url" placeholder="URL" value={wakeupLinks.cashlog.url} onChange={(e) => setWakeupLinks('cashlog', { ...wakeupLinks.cashlog, url: e.target.value })} className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
-                  <input type="text" placeholder="Name" value={wakeupLinks.cashlog.label} onChange={(e) => setWakeupLinks('cashlog', { ...wakeupLinks.cashlog, label: e.target.value })} className="w-28 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
-                  {wakeupLinks.cashlog.url && <a href={wakeupLinks.cashlog.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline text-sm shrink-0">{wakeupLinks.cashlog.label || 'Open'}</a>}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-slate-600 dark:text-slate-400 text-sm w-20 shrink-0">Returns</span>
-                  <input type="url" placeholder="URL" value={wakeupLinks.returns.url} onChange={(e) => setWakeupLinks('returns', { ...wakeupLinks.returns, url: e.target.value })} className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
-                  <input type="text" placeholder="Name" value={wakeupLinks.returns.label} onChange={(e) => setWakeupLinks('returns', { ...wakeupLinks.returns, label: e.target.value })} className="w-28 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
-                  {wakeupLinks.returns.url && <a href={wakeupLinks.returns.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline text-sm shrink-0">{wakeupLinks.returns.label || 'Open'}</a>}
+                <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/50">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Returns</label>
+                  <input type="url" placeholder="Paste URL" value={wakeupLinks.returns.url} onChange={(e) => setWakeupLinks('returns', { ...wakeupLinks.returns, url: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
+                  <div className="flex items-center gap-2">
+                    <input type="text" placeholder="Label" value={wakeupLinks.returns.label} onChange={(e) => setWakeupLinks('returns', { ...wakeupLinks.returns, label: e.target.value })} className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 placeholder-slate-400" />
+                    {wakeupLinks.returns.url && <a href={wakeupLinks.returns.url} target="_blank" rel="noopener noreferrer" className="shrink-0 px-2 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline rounded-md border border-slate-200 dark:border-slate-600">{wakeupLinks.returns.label || 'Open'}</a>}
+                  </div>
                 </div>
               </div>
             </div>
