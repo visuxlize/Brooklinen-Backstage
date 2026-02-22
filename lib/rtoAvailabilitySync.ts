@@ -182,7 +182,6 @@ export async function applyRtoApprovalToAvailabilityAndSchedule(
           target: [schedules.storeId, schedules.employeeName, schedules.weekStart, schedules.dayOfWeek],
           set: { shiftValue: scheduleValue, updatedAt: new Date() },
         })
-      )
     }
   }
 }
