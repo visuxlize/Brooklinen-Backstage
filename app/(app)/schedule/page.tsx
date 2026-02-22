@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { schedules, users, retailData, stores } from '@/lib/db/schema'
+import { schedules, users, retailData, stores, rtoRequests } from '@/lib/db/schema'
 import { and, eq, gte, lte } from 'drizzle-orm'
+import { ensureRtoRequestDates } from '@/lib/scheduleRtoUtils'
 import { getStore, STORE_CONFIG, type StoreConfig } from '@/lib/stores'
 import { canEditSchedule, isFullControl } from '@/lib/roles'
 import { ScheduleGrid } from '@/components/schedule/ScheduleGrid'
@@ -80,6 +81,32 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
 
   const employees = [...userNames].sort()
 
+  const approvedRtoRows = await db
+    .select({
+      id: rtoRequests.id,
+      employeeName: rtoRequests.employeeName,
+      type: rtoRequests.type,
+      status: rtoRequests.status,
+      startDate: rtoRequests.startDate,
+      endDate: rtoRequests.endDate,
+      requestedDays: rtoRequests.requestedDays,
+    })
+    .from(rtoRequests)
+    .where(and(eq(rtoRequests.storeId, storeId), eq(rtoRequests.status, 'approved')))
+
+  const initialApprovedRtoRequests = approvedRtoRows
+    .map((r) => ({
+      id: r.id,
+      employeeName: r.employeeName,
+      type: r.type,
+      status: r.status,
+      startDate: r.startDate != null ? String(r.startDate).slice(0, 10) : null,
+      endDate: r.endDate != null ? String(r.endDate).slice(0, 10) : null,
+      requestedDays: r.requestedDays,
+    }))
+    .map(ensureRtoRequestDates)
+    .filter((r): r is NonNullable<ReturnType<typeof ensureRtoRequestDates>> => r != null)
+
   const weekEnd = format(addDays(weekStart, 6), 'yyyy-MM-dd')
   const budgetRows = await db
     .select({ date: retailData.date, budgetNet: retailData.budgetNet, lyNet: retailData.lyNet })
@@ -125,6 +152,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
       initialWeeklyLy={weeklyLy || null}
       initialDailyBudget={dailyBudget}
       initialDailyLy={dailyLy}
+      initialApprovedRtoRequests={initialApprovedRtoRequests}
     />
   )
 }

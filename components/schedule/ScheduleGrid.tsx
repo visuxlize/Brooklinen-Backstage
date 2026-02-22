@@ -12,6 +12,13 @@ import { HoursSummary } from './HoursSummary'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar } from '@/components/ui/Avatar'
 import { parsePaidHours, SHIFT_TYPES, shiftFitsInWindow, formatTime24to12 } from '@/lib/shiftUtils'
+import {
+  getCellValue,
+  cellValueToDisplay,
+  cellValueToHours,
+  ensureRtoRequestDates,
+  type RtoRequestForSchedule,
+} from '@/lib/scheduleRtoUtils'
 import { STORE_CONFIG, type StoreConfig } from '@/lib/stores'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
@@ -37,6 +44,7 @@ interface ScheduleGridProps {
   initialPeakWindowByDay?: string[]
   initialAllowableHours?: number | null
   initialWeekMeta?: { workload: Record<string, string> | null; promotions: Record<string, string> | null; hoursOverride: Record<string, string> | null }
+  initialApprovedRtoRequests?: (RtoRequestForSchedule & { startDate: string; endDate: string })[]
 }
 
 const SHIFT_LEGEND = [
@@ -64,9 +72,13 @@ export function ScheduleGrid({
   initialPeakWindowByDay,
   initialAllowableHours = null,
   initialWeekMeta,
+  initialApprovedRtoRequests = [],
 }: ScheduleGridProps) {
   const [weekIdx, setWeekIdx] = useState(initialWeekIdx)
   const [gridData, setGridData] = useState<GridData>(initialData)
+  const [approvedRtoRequests, setApprovedRtoRequests] = useState<
+    (RtoRequestForSchedule & { startDate: string; endDate: string })[]
+  >(initialApprovedRtoRequests)
   const [loading, setLoading] = useState(false)
   const [dailyBudget, setDailyBudget] = useState<number[]>(initialDailyBudget ?? [0, 0, 0, 0, 0, 0, 0])
   const [dailyLy, setDailyLy] = useState<number[]>(initialDailyLy ?? [0, 0, 0, 0, 0, 0, 0])
@@ -133,14 +145,18 @@ export function ScheduleGrid({
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
   }
 
+  const rtoList = approvedRtoRequests.filter((r) => r.type.toUpperCase() === 'RTO')
+  const ptoList = approvedRtoRequests.filter((r) => r.type.toUpperCase() === 'PTO')
+
   // Fetch data when store or week changes
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
       try {
-        const [scheduleRes, availabilityRes] = await Promise.all([
+        const [scheduleRes, availabilityRes, rtoRes] = await Promise.all([
           fetch(`/api/schedule?storeId=${store.id}&weekStart=${weekStartStr}`),
           fetch(`/api/availability?storeId=${store.id}&weekStart=${weekStartStr}`),
+          fetch(`/api/rto?storeId=${store.id}`),
         ])
         if (scheduleRes.ok) {
           const json = await scheduleRes.json()
@@ -185,6 +201,23 @@ export function ScheduleGrid({
           setWeekAvailability(typeof av.weekAvailability === 'object' && av.weekAvailability !== null ? av.weekAvailability : null)
         } else {
           setWeekAvailability(null)
+        }
+        if (rtoRes.ok) {
+          const { data: rtoData } = await rtoRes.json()
+          const list = (Array.isArray(rtoData) ? rtoData : [])
+            .filter((r: { status: string }) => r.status?.toLowerCase() === 'approved')
+            .map((r: { id: string; employeeName: string; type: string; status: string; startDate?: string | null; endDate?: string | null; requestedDays?: string }) => ({
+              id: r.id,
+              employeeName: r.employeeName,
+              type: r.type,
+              status: r.status,
+              startDate: r.startDate != null ? String(r.startDate).slice(0, 10) : null,
+              endDate: r.endDate != null ? String(r.endDate).slice(0, 10) : null,
+              requestedDays: r.requestedDays,
+            }))
+            .map(ensureRtoRequestDates)
+            .filter((x): x is NonNullable<ReturnType<typeof ensureRtoRequestDates>> => x != null)
+          setApprovedRtoRequests(list)
         }
       } finally {
         setLoading(false)
@@ -361,54 +394,128 @@ export function ScheduleGrid({
   }
 
   async function handleSaveScheduleAsImage() {
-    const el = gridRef.current
-    if (!el) return
+    const original = gridRef.current
+    if (!original) return
     setEmailState('loading')
     try {
-      const clone = el.cloneNode(true) as HTMLElement
-      clone.style.position = 'fixed'
-      clone.style.top = '-9999px'
-      clone.style.left = '0'
-      clone.style.background = '#ffffff'
-      clone.style.overflow = 'visible'
-      const fullWidth = el.scrollWidth
+      const fullWidth = original.scrollWidth
+      const fullHeight = original.scrollHeight
+      const clone = original.cloneNode(true) as HTMLElement
+      clone.style.cssText = `
+        position: fixed;
+        top: -99999px;
+        left: 0;
+        background: #ffffff;
+        overflow: visible;
+        z-index: -1;
+      `
       clone.style.width = `${fullWidth}px`
       clone.style.minWidth = `${fullWidth}px`
-      const table = clone.querySelector('table')
-      if (table) {
-        ;(table as HTMLElement).style.width = '100%'
-        ;(table as HTMLElement).style.tableLayout = 'fixed'
-        ;(table as HTMLElement).style.overflow = 'visible'
+      clone.style.height = `${fullHeight}px`
+      document.body.appendChild(clone)
+
+      clone.querySelectorAll('*').forEach((el) => {
+        const htmlEl = el as HTMLElement
+        const s = window.getComputedStyle(htmlEl)
+        if (s.overflow === 'auto' || s.overflow === 'scroll' || s.overflowX === 'auto' || s.overflowX === 'scroll' || s.overflowY === 'auto' || s.overflowY === 'scroll') {
+          htmlEl.style.overflow = 'visible'
+          htmlEl.style.overflowX = 'visible'
+          htmlEl.style.overflowY = 'visible'
+        }
+      })
+
+      const tables = clone.querySelectorAll('table')
+      tables.forEach((t) => {
+        const tab = t as HTMLElement
+        tab.style.width = '100%'
+        tab.style.minWidth = `${fullWidth}px`
+        tab.style.tableLayout = 'auto'
+      })
+
+      const saveBtn = clone.querySelector('[data-save-btn]')
+      if (saveBtn) (saveBtn as HTMLElement).style.display = 'none'
+
+      const coverageRow = clone.querySelector('tr[data-row="coverage"]')
+      if (coverageRow) {
+        const select = coverageRow.querySelector('select')
+        if (select) {
+          const opt = select.options[select.selectedIndex]
+          const span = document.createElement('span')
+          span.className = 'text-xs text-slate-600 dark:text-slate-400'
+          span.textContent = opt?.text ?? '—'
+          select.parentNode?.replaceChild(span, select)
+        }
+        const input = coverageRow.querySelector('input[type="text"]')
+        if (input) {
+          const span = document.createElement('span')
+          span.className = 'text-xs text-slate-700 dark:text-slate-200'
+          span.textContent = (input as HTMLInputElement).value?.trim() || '—'
+          input.parentNode?.replaceChild(span, input)
+        }
       }
-      const header = document.createElement('div')
-      const weekEnd = addDays(weekStart, 6)
-      header.textContent = `${store.name} · ${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}, ${format(weekStart, 'yyyy')}`
-      header.style.cssText = 'font-size: 18px; font-weight: 600; color: #0f172a; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; background: #ffffff;'
-      const wrapper = document.createElement('div')
-      wrapper.style.position = 'fixed'
-      wrapper.style.top = '-9999px'
-      wrapper.style.left = '0'
-      wrapper.style.background = '#ffffff'
-      wrapper.style.overflow = 'visible'
-      wrapper.style.width = `${fullWidth}px`
-      wrapper.appendChild(header)
-      wrapper.appendChild(clone)
-      document.body.appendChild(wrapper)
-      await new Promise((r) => setTimeout(r, 150))
-      const canvas = await html2canvas(wrapper, {
+
+      clone.querySelectorAll('[role="listbox"], [role="tooltip"], .dropdown-panel').forEach((el) => {
+        (el as HTMLElement).style.display = 'none'
+      })
+
+      const shiftCells = clone.querySelectorAll('td[data-cell-type="shift"]')
+      shiftCells.forEach((td) => {
+        const cell = td as HTMLElement
+        const value = (cell.getAttribute('data-value') ?? '').trim()
+        const isOff = value === 'OFF' || value === 'HOL'
+        const isPto = value === 'PTO'
+        cell.style.background = isPto ? '#fff8e1' : isOff ? '#fff0ef' : '#eef1f8'
+        cell.style.border = `1px solid ${isPto ? '#ffe082' : isOff ? '#ffd5d3' : '#dde3f0'}`
+        cell.style.borderRadius = '8px'
+        cell.style.padding = '6px 10px'
+        cell.style.textAlign = 'center'
+        cell.style.fontSize = '0.8rem'
+        cell.style.fontWeight = isOff || isPto ? '700' : '500'
+        cell.style.color = isPto ? '#f59e0b' : isOff ? '#e53935' : '#1a2332'
+        cell.style.display = 'flex'
+        cell.style.alignItems = 'center'
+        cell.style.justifyContent = 'center'
+        cell.style.width = '100%'
+        cell.style.boxSizing = 'border-box'
+        const inner = cell.querySelector('div, span')
+        if (inner) (inner as HTMLElement).style.color = isPto ? '#f59e0b' : isOff ? '#e53935' : '#1a2332'
+      })
+
+      const powerHourRow = clone.querySelector('[data-row="power-hour"]')
+      if (powerHourRow) (powerHourRow as HTMLElement).style.background = '#fffbf5'
+
+      const actualHoursRow = clone.querySelector('[data-row="actual-hours"]')
+      if (actualHoursRow) {
+        (actualHoursRow as HTMLElement).style.background = '#0e1f3d'
+        actualHoursRow.querySelectorAll('td, [role="cell"]').forEach((c) => {
+          (c as HTMLElement).style.color = '#ffffff'
+        })
+      }
+
+      await new Promise((r) => setTimeout(r, 200))
+
+      const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
         scrollX: 0,
         scrollY: 0,
         windowWidth: fullWidth,
-        windowHeight: wrapper.scrollHeight,
+        windowHeight: fullHeight,
         logging: false,
+        imageTimeout: 0,
+        removeContainer: true,
       } as Parameters<typeof html2canvas>[1])
-      document.body.removeChild(wrapper)
-      const safeWeek = `${format(weekStart, 'MMM-d')}-${format(weekStart, 'yyyy')}`.replace(/[^a-zA-Z0-9-]/g, '-')
+      if (document.body.contains(clone)) document.body.removeChild(clone)
+
+      const weekEnd = addDays(weekStart, 6)
+      const weekLabel = `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}, ${format(weekStart, 'yyyy')}`
+      const safeStore = store.name.toLowerCase().replace(/\s+/g, '-')
+      const safeWeek = weekLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
+      const filename = `schedule-${safeStore}-${safeWeek}.png`
       const link = document.createElement('a')
-      link.download = `schedule-${store.name.toLowerCase().replace(/\s+/g, '-')}-${safeWeek}.png`
+      link.download = filename
       link.href = canvas.toDataURL('image/png')
       link.click()
       setEmailState('sent')
@@ -714,9 +821,9 @@ export function ScheduleGrid({
             ))}
           </div>
         ) : (
-          <table className="w-full min-w-[700px] border-collapse">
+            <table className="w-full min-w-[700px] border-collapse">
             <thead>
-              <tr className="bg-[var(--brand-navy)] text-white border-b-0">
+              <tr data-row="header" className="bg-[var(--brand-navy)] text-white border-b-0" style={{ backgroundColor: '#0e1f3d' }}>
                 <th className="text-left px-4 py-3 w-52 rounded-tl-lg">
                   <span className="text-xs font-semibold uppercase tracking-widest text-white/80">Employee</span>
                 </th>
@@ -730,12 +837,12 @@ export function ScheduleGrid({
                   return (
                     <th key={day} className={`px-2 py-3 text-center ${i === DAYS.length - 1 ? 'rounded-tr-lg' : ''}`}>
                       <div className="text-xs font-semibold">{day}, {format(dayDate, 'MMM d')}</div>
-                      <div className="text-xs text-white/70 font-normal">{storeHour}</div>
+                      <div className="text-xs font-normal" style={{ color: '#8a94a6' }}>{storeHour}</div>
                     </th>
                   )
                 })}
               </tr>
-              <tr className="bg-slate-100 dark:bg-slate-700/80 border-b border-slate-200 dark:border-slate-600">
+              <tr data-row="budget-goal" className="bg-slate-100 dark:bg-slate-700/80 border-b border-slate-200 dark:border-slate-600">
                 <th className="text-left px-4 py-1.5 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Daily budget goal
                 </th>
@@ -748,7 +855,7 @@ export function ScheduleGrid({
                   </th>
                 ))}
               </tr>
-              <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-600">
+              <tr data-row="ly-budget" className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-600">
                 <th className="text-left px-4 py-1.5 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Daily LY budget
                 </th>
@@ -761,7 +868,7 @@ export function ScheduleGrid({
                   </th>
                 ))}
               </tr>
-              <tr className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
+              <tr data-row="promotions" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
                 <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Promotions
                 </td>
@@ -783,7 +890,7 @@ export function ScheduleGrid({
                   </td>
                 ))}
               </tr>
-              <tr className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
+              <tr data-row="workload" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600">
                 <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Workload
                 </td>
@@ -809,16 +916,20 @@ export function ScheduleGrid({
             <tbody>
               {employees.map((emp, index) => {
                 const empData = gridData[emp] ?? {}
-                const weekTotal = Object.values(empData).reduce(
-                  (sum, v) => sum + parsePaidHours(v),
-                  0
-                )
+                const weekTotal = [0, 1, 2, 3, 4, 5, 6].reduce((sum, day) => {
+                  const coverageAwayHere = coverageAway.some((c) => c.employeeName === emp && c.dayOfWeek === day)
+                  const dayDate = addDays(weekStart, day)
+                  const cell = getCellValue(emp, dayDate, coverageAwayHere ? undefined : empData[day], rtoList, ptoList)
+                  return sum + (coverageAwayHere ? 0 : cellValueToHours(cell))
+                }, 0)
                 const isOT = weekTotal > 40
                 const isDragging = draggedIndex === index
                 const isDropTarget = dragOverIndex === index
 
                 return (
                   <tr
+                    data-row="employee"
+                    data-employee-name={emp}
                     key={emp}
                     onDragOver={(e) => handleDragOver(e, index)}
                     onDragLeave={handleDragLeave}
@@ -857,8 +968,17 @@ export function ScheduleGrid({
                       const isCopySource = copySource?.employeeName === emp && copySource?.dayOfWeek === day
                       const cellAvail = weekAvailability?.[emp]?.[day]
                       const coverageAwayHere = coverageAway.find((c) => c.employeeName === emp && c.dayOfWeek === day)
-                      const cellValue = coverageAwayHere ? coverageAwayHere.atStoreName : (empData[day] ?? '')
-                      const isOffOrPto = !coverageAwayHere && (empData[day] === 'OFF' || empData[day] === 'PTO')
+                      const dayDate = addDays(weekStart, day)
+                      const cellResult = coverageAwayHere
+                        ? null
+                        : getCellValue(emp, dayDate, empData[day], rtoList, ptoList)
+                      const cellValue = coverageAwayHere
+                        ? coverageAwayHere.atStoreName
+                        : cellResult != null
+                          ? cellValueToDisplay(cellResult)
+                          : ''
+                      const isOffOrPtoFromRequest = cellResult != null && (cellResult.type === 'OFF' || cellResult.type === 'PTO')
+                      const isOffOrPto = isOffOrPtoFromRequest || (!coverageAwayHere && (empData[day] === 'OFF' || empData[day] === 'PTO'))
                       const isNa = cellAvail?.type === 'na' && !isOffOrPto
                       const hasPartialConflict =
                         cellAvail?.type === 'partial' &&
@@ -883,6 +1003,8 @@ export function ScheduleGrid({
                       return (
                         <td
                           key={day}
+                          data-cell-type={cellValue && cellValue !== '—' ? 'shift' : 'empty'}
+                          data-value={cellValue || ''}
                           className={`px-1.5 py-1.5 ${isCopySource ? 'ring-2 ring-[var(--brand-navy)] ring-offset-1 rounded-lg' : ''} ${(isNa || isOffOrPto) ? 'opacity-90' : ''} ${hasPartialConflict ? 'ring-2 ring-red-500 ring-offset-1 rounded-lg bg-red-50/80 dark:bg-red-900/20' : ''} ${coverageAwayHere ? 'bg-amber-50/80 dark:bg-amber-900/20' : ''}`}
                           onClick={canEdit && copySource && (copySource.employeeName !== emp || copySource.dayOfWeek !== day) ? () => handleCellClickForCopy(emp, day) : undefined}
                           onContextMenu={(e) => handleCellContextMenu(e, emp, day)}
@@ -899,6 +1021,7 @@ export function ScheduleGrid({
                               onPaste={canEdit ? (empName, dayOfWeek) => handleCellClickForCopy(empName, dayOfWeek) : undefined}
                               employeeName={emp}
                               dayOfWeek={day}
+                              isPtoFromRequest={cellResult?.type === 'PTO'}
                             />
                           </div>
                         </td>
@@ -908,7 +1031,7 @@ export function ScheduleGrid({
                 )
               })}
               {canEdit && (
-                <tr className="border-b border-slate-100 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
+                <tr data-row="coverage" className="coverage-section border-b border-slate-100 dark:border-slate-700 bg-amber-50/50 dark:bg-amber-900/10">
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Coverage</span>
@@ -948,7 +1071,20 @@ export function ScheduleGrid({
             <tfoot>
               <HoursSummary
                 employees={employees}
-                data={gridData}
+                data={(() => {
+                  const resolved: Record<string, Record<number, string>> = {}
+                  for (const emp of employees) {
+                    resolved[emp] = {}
+                    for (let day = 0; day < 7; day++) {
+                      const coverageAwayHere = coverageAway.some((c) => c.employeeName === emp && c.dayOfWeek === day)
+                      const dayDate = addDays(weekStart, day)
+                      resolved[emp][day] = coverageAwayHere
+                        ? ''
+                        : cellValueToDisplay(getCellValue(emp, dayDate, gridData[emp]?.[day], rtoList, ptoList))
+                    }
+                  }
+                  return resolved
+                })()}
                 storeColor={store.color}
                 budgetHoursDaily={budgetHoursDaily}
                 trendingHoursDaily={trendingHoursDaily}

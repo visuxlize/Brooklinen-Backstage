@@ -25,6 +25,8 @@ interface ShiftCellProps {
   onPaste?: (employeeName: string, dayOfWeek: number) => void
   employeeName?: string
   dayOfWeek?: number
+  /** True when cell shows PTO from an approved request (yellow pill style). */
+  isPtoFromRequest?: boolean
 }
 
 export function ShiftCell({
@@ -37,6 +39,7 @@ export function ShiftCell({
   onPaste,
   employeeName,
   dayOfWeek,
+  isPtoFromRequest = false,
 }: ShiftCellProps) {
   const [editing, setEditing] = useState(false)
   const [inputVal, setInputVal] = useState(value ?? '')
@@ -101,9 +104,16 @@ export function ShiftCell({
 
   function getCellClasses() {
     if (isEmpty) return 'bg-slate-50 dark:bg-slate-700/60 text-slate-300 dark:text-slate-400'
+    if (isPtoFromRequest || (value?.trim().toUpperCase() === 'PTO' && shiftType))
+      return 'rounded-lg font-bold'
     if (shiftType) return cn(shiftType.bg, shiftType.text, 'border', shiftType.border, 'dark:border-slate-600')
     return 'bg-blue-50 dark:bg-slate-700/80 text-blue-800 dark:text-slate-200 border border-blue-200 dark:border-slate-600'
   }
+
+  const ptoPillStyle =
+    isPtoFromRequest || (value?.trim().toUpperCase() === 'PTO' && shiftType)
+      ? { background: '#fff8e1', border: '1px solid #ffe082', color: '#f59e0b' }
+      : undefined
 
   if (editing && !readOnly) {
     return (
@@ -126,10 +136,11 @@ export function ShiftCell({
     <div className="relative" ref={cellRef}>
       <div
         className={cn(
-          'w-full min-h-[40px] flex items-center justify-center text-xs font-medium rounded-lg px-1 transition-all cursor-default select-none',
+          'w-full min-h-[40px] flex items-center justify-center text-xs font-medium px-1 transition-all cursor-default select-none',
           getCellClasses(),
           !readOnly && 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer'
         )}
+        style={ptoPillStyle}
         onClick={() => !readOnly && setEditing(true)}
         onContextMenu={handleContextMenu}
       >

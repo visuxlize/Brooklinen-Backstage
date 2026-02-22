@@ -79,12 +79,24 @@ export function WeekNav({
       {/* Save as image (for email) */}
       {canEmail && (
         <button
+          data-save-btn
           onClick={onEmail}
           disabled={emailState === 'loading' || emailState === 'sent'}
-          className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 text-sm font-medium transition-colors"
+          className="flex items-center gap-2 disabled:opacity-50 transition-colors"
+          style={{
+            background: '#0e1f3d',
+            color: '#ffffff',
+            padding: '9px 18px',
+            borderRadius: '8px',
+            border: 'none',
+            fontWeight: 600,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+            letterSpacing: '0.01em',
+          }}
         >
           {emailState === 'loading' && <Loader2 className="w-4 h-4 animate-spin" />}
-          {emailState === 'sent' && <Check className="w-4 h-4 text-green-600 dark:text-green-400" />}
+          {emailState === 'sent' && <Check className="w-4 h-4 text-green-300" />}
           {emailState === 'idle' && <FileDown className="w-4 h-4" />}
           {emailState === 'sent' ? 'Image saved' : 'Save as image (for email)'}
         </button>

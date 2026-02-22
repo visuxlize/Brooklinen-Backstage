@@ -32,7 +32,7 @@ export function HoursSummary({
   return (
     <>
       {budgetHoursDaily != null && (
-        <tr className="bg-slate-100 dark:bg-slate-700/60 border-b border-slate-200 dark:border-slate-600">
+        <tr data-row="budget-hours" className="bg-slate-100 dark:bg-slate-700/60 border-b border-slate-200 dark:border-slate-600">
           <td className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">Budget hours</td>
           <td className="px-2 py-2 text-center text-sm font-bold text-slate-800 dark:text-slate-100 w-14">
             {budgetWtd > 0 ? `${budgetWtd}h` : '—'}
@@ -45,54 +45,44 @@ export function HoursSummary({
         </tr>
       )}
       {trendingHoursDaily != null && (
-        <tr className="bg-slate-50 dark:bg-slate-700/40 border-b border-slate-200 dark:border-slate-600">
+        <tr data-row="trending-hours" className="bg-slate-50 dark:bg-slate-700/40 border-b border-slate-200 dark:border-slate-600">
           <td className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200">Trending hours</td>
           <td className="px-2 py-2 text-center text-sm font-bold text-slate-800 dark:text-slate-100 w-14">
             {trendingWtd > 0 ? `${trendingWtd}h` : '—'}
           </td>
           {DAY_KEYS.map((day) => (
             <td key={day} className="px-2 py-2 text-center text-sm font-medium text-slate-800 dark:text-slate-100">
-              {trendingHoursDaily[day] != null && trendingHoursDaily[day] > 0 ? (
-                <span>
-                  {trendingHoursDaily[day]}h
-                  {peakWindowByDay?.[day] && peakWindowByDay[day] !== '—' && (
-                    <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">
-                      Peak ({peakWindowByDay[day]})
-                    </span>
-                  )}
-                </span>
-              ) : (
-                '—'
-              )}
+              {trendingHoursDaily[day] != null && trendingHoursDaily[day] > 0 ? `${trendingHoursDaily[day]}h` : '—'}
             </td>
           ))}
         </tr>
       )}
       {peakWindowByDay != null && peakWindowByDay.some((w) => w && w !== '—') && (
-        <tr className="bg-gradient-to-r from-amber-500/15 to-orange-500/15 dark:from-amber-500/20 dark:to-orange-500/20 border-b-2 border-amber-400/30 dark:border-amber-400/40">
+        <tr data-row="power-hour" className="power-hour-row bg-gradient-to-r from-amber-500/15 to-orange-500/15 dark:from-amber-500/20 dark:to-orange-500/20 border-b-2 border-amber-400/30 dark:border-amber-400/40" style={{ backgroundColor: '#fffbf5' }}>
           <td className="px-4 py-2.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400/40 dark:bg-amber-500/30 text-amber-700 dark:text-amber-300" aria-hidden>⚡</span>
+            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: '#92400e' }}>
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full" style={{ backgroundColor: 'rgba(245, 158, 11, 0.4)', color: '#f59e0b' }} aria-hidden>⚡</span>
               Power Hour
             </span>
-            <span className="block text-[10px] font-normal text-amber-700/90 dark:text-amber-300/90 mt-0.5">Busiest window each day</span>
+            <span className="block text-[10px] font-normal mt-0.5" style={{ color: '#b45309' }}>Busiest window each day</span>
           </td>
-          <td className="px-2 py-2.5 w-14 text-center text-xs font-medium text-amber-800 dark:text-amber-200">—</td>
+          <td className="px-2 py-2.5 w-14 text-center text-xs font-medium" style={{ color: '#92400e' }}>—</td>
           {DAY_KEYS.map((day) => (
             <td key={day} className="px-2 py-2.5 text-center">
-              <span className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+              <span className="text-xs font-semibold" style={{ color: '#1a2332' }}>
                 {peakWindowByDay[day] && peakWindowByDay[day] !== '—' ? peakWindowByDay[day] : '—'}
               </span>
             </td>
           ))}
         </tr>
       )}
-      <tr className="bg-[var(--brand-navy)] text-white border-t-0">
+      <tr data-row="actual-hours" className="actual-hours-row bg-[var(--brand-navy)] text-white border-t-0" style={{ backgroundColor: '#0e1f3d' }}>
         <td className="px-4 py-3 rounded-bl-lg">
           <span className="text-xs font-semibold uppercase tracking-widest text-white/80">Actual Hours</span>
         </td>
         <td
           className={`px-2 py-3 text-center w-14 ${isOverBudget ? 'bg-red-600 dark:bg-red-700' : ''}`}
+          style={isOverBudget ? { backgroundColor: '#dd2626' } : undefined}
         >
           <span className="text-sm font-extrabold text-white">
             {grandTotal > 0 ? `${grandTotal}h` : '0h'}

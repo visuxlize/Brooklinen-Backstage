@@ -56,13 +56,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     storeId: dbUser.storeId ?? null,
   }
 
+  // Badge: only count requests that need manager action (Pending). Approved/Denied are not shown.
   let pendingCounts: Record<number, number> = {}
   try {
     if (user.role === 'ops' || user.role === 'area_manager') {
       const pending = await db
         .select({ storeId: rtoRequests.storeId })
         .from(rtoRequests)
-        .where(eq(rtoRequests.status, 'pending'))
+        .where(sql`lower(${rtoRequests.status}) = 'pending'`)
 
       for (const row of pending) {
         pendingCounts[row.storeId] = (pendingCounts[row.storeId] ?? 0) + 1
@@ -71,7 +72,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       const pending = await db
         .select({ storeId: rtoRequests.storeId })
         .from(rtoRequests)
-        .where(and(eq(rtoRequests.storeId, user.storeId), eq(rtoRequests.status, 'pending')))
+        .where(and(eq(rtoRequests.storeId, user.storeId), sql`lower(${rtoRequests.status}) = 'pending'`))
 
       for (const row of pending) {
         pendingCounts[row.storeId] = (pendingCounts[row.storeId] ?? 0) + 1

@@ -247,15 +247,17 @@ export async function applyRtoApprovalToAvailabilityAndSchedule(
       })
   }
 
-  // Schedule: set OFF for RTO, PTO for PTO (Partial has no default shift, just availability)
+  // Schedule: set OFF for RTO, PTO for PTO (Partial has no default shift, just availability).
+  // Use dbUser.name (canonical from users table) so schedule page matches.
   const scheduleValue = isPTO ? 'PTO' : isRTO ? 'OFF' : null
+  const employeeNameForSchedule = dbUser.name
   if (scheduleValue) {
     for (const { weekStart, dayOfWeek } of dateInfos) {
       await db
         .insert(schedules)
         .values({
           storeId: request.storeId,
-          employeeName: request.employeeName,
+          employeeName: employeeNameForSchedule,
           weekStart,
           dayOfWeek,
           shiftValue: scheduleValue,

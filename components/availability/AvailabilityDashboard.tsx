@@ -5,11 +5,30 @@ import { format, addDays } from 'date-fns'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getWeekStartByIndex, getWeekIndexForDate, getTotalWeeks } from '@/lib/scheduleWeeks'
+import { isDateInRange, ensureRtoRequestDates, type RtoRequestForSchedule } from '@/lib/scheduleRtoUtils'
 import type { StoreConfig } from '@/lib/stores'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 type DayType = 'open' | 'na' | 'partial'
+
+function getAvailabilityDisplay(
+  employeeName: string,
+  dateStr: string,
+  rtoRequests: (RtoRequestForSchedule & { startDate: string; endDate: string })[],
+  ptoRequests: (RtoRequestForSchedule & { startDate: string; endDate: string })[]
+): { label: 'RTO' | 'PTO'; color: string; textColor: string } | null {
+  const norm = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+  const approvedRTO = rtoRequests.find(
+    (r) => norm(r.employeeName, employeeName) && r.type.toUpperCase() === 'RTO' && isDateInRange(dateStr, r.startDate, r.endDate)
+  )
+  if (approvedRTO) return { label: 'RTO', color: '#fff0ef', textColor: '#e53935' }
+  const approvedPTO = ptoRequests.find(
+    (r) => norm(r.employeeName, employeeName) && r.type.toUpperCase() === 'PTO' && isDateInRange(dateStr, r.startDate, r.endDate)
+  )
+  if (approvedPTO) return { label: 'PTO', color: '#fff8e1', textColor: '#f59e0b' }
+  return null
+}
 
 interface DaySlot {
   type: DayType
@@ -52,6 +71,7 @@ export function AvailabilityDashboard({ store }: AvailabilityDashboardProps) {
   const [weekIdx, setWeekIdx] = useState(() => getWeekIndexForDate(new Date()))
   const [saveState, setSaveState] = useState<'idle' | 'saving'>('idle')
   const [toast, setToast] = useState<string | null>(null)
+  const [approvedRtoRequests, setApprovedRtoRequests] = useState<(RtoRequestForSchedule & { startDate: string; endDate: string })[]>([])
 
   const totalWeeks = getTotalWeeks()
   const weekStart = getWeekStartByIndex(weekIdx)
@@ -61,9 +81,10 @@ export function AvailabilityDashboard({ store }: AvailabilityDashboardProps) {
   async function load() {
     setLoading(true)
     try {
-      const [usersRes, availRes] = await Promise.all([
+      const [usersRes, availRes, rtoRes] = await Promise.all([
         fetch(`/api/admin/users?storeId=${store.id}`),
         fetch(`/api/availability?storeId=${store.id}`),
+        fetch(`/api/rto?storeId=${store.id}`),
       ])
       if (usersRes.ok) {
         const { data: userData } = await usersRes.json()
@@ -74,6 +95,23 @@ export function AvailabilityDashboard({ store }: AvailabilityDashboardProps) {
       if (availRes.ok) {
         const { data: availData } = await availRes.json()
         setRows(availData)
+      }
+      if (rtoRes.ok) {
+        const { data: rtoData } = await rtoRes.json()
+        const list = (Array.isArray(rtoData) ? rtoData : [])
+          .filter((r: { status: string }) => r.status?.toLowerCase() === 'approved')
+          .map((r: { id: string; employeeName: string; type: string; status: string; startDate?: string | null; endDate?: string | null; requestedDays?: string }) => ({
+            id: r.id,
+            employeeName: r.employeeName,
+            type: r.type,
+            status: r.status,
+            startDate: r.startDate != null ? String(r.startDate).slice(0, 10) : null,
+            endDate: r.endDate != null ? String(r.endDate).slice(0, 10) : null,
+            requestedDays: r.requestedDays,
+          }))
+          .map(ensureRtoRequestDates)
+          .filter((x): x is NonNullable<ReturnType<typeof ensureRtoRequestDates>> => x != null)
+        setApprovedRtoRequests(list)
       }
     } finally {
       setLoading(false)
@@ -142,6 +180,8 @@ export function AvailabilityDashboard({ store }: AvailabilityDashboardProps) {
   }
 
   const selectedEmployee = employees.find((e) => e.id === selectedUserId)
+  const rtoList = approvedRtoRequests.filter((r) => r.type.toUpperCase() === 'RTO')
+  const ptoList = approvedRtoRequests.filter((r) => r.type.toUpperCase() === 'PTO')
 
   return (
     <div className="p-4 max-w-5xl">
@@ -261,12 +301,18 @@ export function AvailabilityDashboard({ store }: AvailabilityDashboardProps) {
             <div className="grid grid-cols-7 divide-x divide-slate-200 dark:divide-slate-600 min-h-[200px]">
               {[0, 1, 2, 3, 4, 5, 6].map((day) => {
                 const slot = pattern[String(day)] ?? { type: 'open' }
+                const dateStr = format(addDays(weekStart, day), 'yyyy-MM-dd')
+                const overlay =
+                  weekOnly && selectedEmployee
+                    ? getAvailabilityDisplay(selectedEmployee.name, dateStr, rtoList, ptoList)
+                    : null
                 return (
                   <DayCell
                     key={day}
                     slot={slot}
                     onChange={(newSlot) => setDay(day, newSlot)}
                     disabled={!selectedUserId}
+                    overlay={overlay}
                   />
                 )
               })}
@@ -290,10 +336,12 @@ function DayCell({
   slot,
   onChange,
   disabled,
+  overlay,
 }: {
   slot: DaySlot
   onChange: (s: DaySlot) => void
   disabled: boolean
+  overlay?: { label: 'RTO' | 'PTO'; color: string; textColor: string } | null
 }) {
   const [type, setType] = useState<DayType>(slot.type)
   const [start, setStart] = useState(slot.start ?? '09:00')
@@ -322,6 +370,14 @@ function DayCell({
 
   return (
     <div className="p-3 flex flex-col gap-2 bg-white dark:bg-slate-800/30">
+      {overlay && (
+        <div
+          className="rounded-lg px-2 py-1 text-xs font-bold text-center"
+          style={{ background: overlay.color, color: overlay.textColor }}
+        >
+          {overlay.label}
+        </div>
+      )}
       <div className="flex flex-col gap-1">
         {(['open', 'na', 'partial'] as const).map((t) => (
           <button
