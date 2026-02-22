@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { Menu, ChevronDown, User, LogOut } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { Menu, ChevronDown, User } from 'lucide-react'
 import { STORE_CONFIG } from '@/lib/stores'
 import { Avatar } from '@/components/ui/Avatar'
 import { Chip } from '@/components/ui/Chip'
@@ -11,7 +11,6 @@ import { BrooklinenLogo } from '@/components/ui/BrooklinenLogo'
 import { useStore } from '@/lib/store-context'
 import { RTO_SUBMIT_URL } from '@/lib/app-config'
 import { useUserPreferencesStore, getInitials } from '@/lib/user-preferences-store'
-import { createClient } from '@/lib/supabase/client'
 
 interface TopBarProps {
   currentUser: {
@@ -48,7 +47,6 @@ function buildTabs(role: string, storeId: number | null, pendingRtoCount: number
 export function TopBar({ currentUser, onToggleSidebar, pendingRtoCount = 0, sidebarOpen = true }: TopBarProps) {
   const { activeStoreId } = useStore()
   const pathname = usePathname()
-  const router = useRouter()
   const [avatarOpen, setAvatarOpen] = useState(false)
   const avatarRef = useRef<HTMLDivElement>(null)
   const { displayName, avatarUrl } = useUserPreferencesStore()
@@ -64,13 +62,6 @@ export function TopBar({ currentUser, onToggleSidebar, pendingRtoCount = 0, side
       return () => document.removeEventListener('click', onClickOutside)
     }
   }, [avatarOpen])
-
-  async function handleLogOut() {
-    setAvatarOpen(false)
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
 
   const activeStore = STORE_CONFIG.find((s) => s.id === activeStoreId)
   const tabs = buildTabs(currentUser.role, activeStoreId, pendingRtoCount)
@@ -177,14 +168,6 @@ export function TopBar({ currentUser, onToggleSidebar, pendingRtoCount = 0, side
                 <User className="w-4 h-4" />
                 My Settings
               </Link>
-              <button
-                type="button"
-                onClick={handleLogOut}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50"
-              >
-                <LogOut className="w-4 h-4" />
-                Log out
-              </button>
             </div>
           )}
         </div>

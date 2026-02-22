@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Palmtree, RefreshCw, Thermometer, X, Copy, ClipboardPaste } from 'lucide-react'
+import { Palmtree, RefreshCw, Thermometer, X, Copy, ClipboardPaste, Lock } from 'lucide-react'
 import { getShiftType, SHIFT_TYPES, normalizeShiftDisplay } from '@/lib/shiftUtils'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +27,8 @@ interface ShiftCellProps {
   dayOfWeek?: number
   /** True when cell shows PTO from an approved request (yellow pill style). */
   isPtoFromRequest?: boolean
+  /** True when cell is locked by approved RTO/PTO (show lock icon, undo in RTO tab to edit). */
+  isLockedByRto?: boolean
 }
 
 export function ShiftCell({
@@ -40,6 +42,7 @@ export function ShiftCell({
   employeeName,
   dayOfWeek,
   isPtoFromRequest = false,
+  isLockedByRto = false,
 }: ShiftCellProps) {
   const [editing, setEditing] = useState(false)
   const [inputVal, setInputVal] = useState(value ?? '')
@@ -138,13 +141,20 @@ export function ShiftCell({
         className={cn(
           'w-full min-h-[40px] flex items-center justify-center text-xs font-medium px-1 transition-all cursor-default select-none',
           getCellClasses(),
-          !readOnly && 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer'
+          !readOnly && 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer',
+          isLockedByRto && readOnly && 'cursor-not-allowed opacity-90'
         )}
         style={ptoPillStyle}
         onClick={() => !readOnly && setEditing(true)}
         onContextMenu={handleContextMenu}
+        title={isLockedByRto && readOnly ? 'Approved time off — undo in RTO tab to edit' : undefined}
       >
-        <span className="text-center leading-tight">{isEmpty ? '—' : value}</span>
+        <span className="text-center leading-tight flex items-center gap-1">
+          {isEmpty ? '—' : value}
+          {isLockedByRto && readOnly && (
+            <Lock className="w-3 h-3 flex-shrink-0 opacity-60" aria-hidden />
+          )}
+        </span>
       </div>
 
       {/* Quick-set popover */}

@@ -226,33 +226,42 @@ export function ScheduleGrid({
     fetchData()
   }, [store.id, weekStartStr, refetchTrigger])
 
+  const refetchApprovedRto = useCallback(() => {
+    fetch(`/api/rto?storeId=${store.id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { data?: Array<{ id: string; employeeName: string; type: string; status: string; startDate?: string | null; endDate?: string | null; requestedDays?: string }> } | null) => {
+        if (!json?.data) return
+        const list = (Array.isArray(json.data) ? json.data : [])
+          .filter((r) => r.status?.toLowerCase() === 'approved')
+          .map((r) => ({
+            id: r.id,
+            employeeName: r.employeeName,
+            type: r.type,
+            status: r.status,
+            startDate: r.startDate != null ? String(r.startDate).slice(0, 10) : null,
+            endDate: r.endDate != null ? String(r.endDate).slice(0, 10) : null,
+            requestedDays: r.requestedDays,
+          }))
+          .map(ensureRtoRequestDates)
+          .filter((x): x is NonNullable<ReturnType<typeof ensureRtoRequestDates>> => x != null)
+        setApprovedRtoRequests(list)
+      })
+  }, [store.id])
+
   // Refetch approved RTO when tab becomes visible so Undo/Deny on RTO tab updates schedule cells
   useEffect(() => {
     function onVisible() {
       if (document.visibilityState !== 'visible') return
-      fetch(`/api/rto?storeId=${store.id}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((json: { data?: Array<{ id: string; employeeName: string; type: string; status: string; startDate?: string | null; endDate?: string | null; requestedDays?: string }> } | null) => {
-          if (!json?.data) return
-          const list = (Array.isArray(json.data) ? json.data : [])
-            .filter((r) => r.status?.toLowerCase() === 'approved')
-            .map((r) => ({
-              id: r.id,
-              employeeName: r.employeeName,
-              type: r.type,
-              status: r.status,
-              startDate: r.startDate != null ? String(r.startDate).slice(0, 10) : null,
-              endDate: r.endDate != null ? String(r.endDate).slice(0, 10) : null,
-              requestedDays: r.requestedDays,
-            }))
-            .map(ensureRtoRequestDates)
-            .filter((x): x is NonNullable<ReturnType<typeof ensureRtoRequestDates>> => x != null)
-          setApprovedRtoRequests(list)
-        })
+      refetchApprovedRto()
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [store.id])
+  }, [refetchApprovedRto])
+
+  // Refetch approved RTO when user navigates to schedule page (e.g. from RTO after Undo)
+  useEffect(() => {
+    if (pathname?.includes('/schedule')) refetchApprovedRto()
+  }, [pathname, refetchApprovedRto])
 
   const handleCellChange = useCallback(
     async (employeeName: string, dayOfWeek: number, value: string) => {
@@ -422,160 +431,69 @@ export function ScheduleGrid({
   }
 
   async function handleSaveScheduleAsImage() {
-    const original = gridRef.current
-    if (!original) return
+    const el = gridRef.current
+    if (!el) return
     setEmailState('loading')
     try {
-      const origRect = original.getBoundingClientRect()
-      const fullWidth = Math.max(original.scrollWidth, origRect.width, 1400)
-      const fullHeight = original.scrollHeight
+      const fullWidth = el.scrollWidth
+      const prevWidth = el.style.width
+      const prevOverflow = el.style.overflow
+      const prevMinWidth = el.style.minWidth
 
-      const wrapper = document.createElement('div')
-      wrapper.style.cssText = `
-        position: fixed;
-        top: -${fullHeight + 200}px;
-        left: 0;
-        width: ${fullWidth}px;
-        min-width: ${fullWidth}px;
-        max-width: ${fullWidth}px;
-        height: auto;
-        overflow: visible;
-        z-index: -999;
-        background: #ffffff;
-        font-family: inherit;
-      `
+      el.style.width = `${fullWidth}px`
+      el.style.minWidth = `${fullWidth}px`
+      el.style.overflow = 'visible'
 
-      const clone = original.cloneNode(true) as HTMLElement
-      clone.style.cssText = `
-        width: ${fullWidth}px;
-        min-width: ${fullWidth}px;
-        overflow: visible;
-        position: static;
-      `
-      wrapper.appendChild(clone)
-      document.body.appendChild(wrapper)
-
-      clone.querySelectorAll('*').forEach((el) => {
-        const htmlEl = el as HTMLElement
-        const cs = window.getComputedStyle(htmlEl)
-        if (cs.overflow === 'hidden' || cs.overflow === 'auto' || cs.overflow === 'scroll') {
-          htmlEl.style.overflow = 'visible'
-        }
-        if (cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll') {
-          htmlEl.style.overflowX = 'visible'
-        }
-        if (cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll') {
-          htmlEl.style.overflowY = 'visible'
-        }
-      })
-
-      const table = clone.querySelector('table[data-schedule-table], table, [role="grid"]')
-      if (table) {
-        const tab = table as HTMLElement
-        tab.style.width = `${fullWidth}px`
-        tab.style.minWidth = `${fullWidth}px`
-        tab.style.tableLayout = 'fixed'
-        const headerCells = tab.querySelectorAll('thead tr:first-child th, [data-row="header"] th')
-        const colCount = headerCells.length || 9
-        const colWidths = [
-          Math.round(fullWidth * 0.13),
-          Math.round(fullWidth * 0.07),
-          ...Array(7).fill(Math.round(fullWidth * 0.114)),
-        ]
-        const allRows = tab.querySelectorAll('tr')
-        allRows.forEach((row) => {
-          const cells = row.querySelectorAll('td, th')
-          cells.forEach((cell, i) => {
-            const w = colWidths[i] ?? colWidths[colWidths.length - 1]
-            ;(cell as HTMLElement).style.width = `${w}px`
-            ;(cell as HTMLElement).style.minWidth = `${w}px`
-            ;(cell as HTMLElement).style.maxWidth = `${w}px`
+      const scrollParents: { el: HTMLElement; overflow: string; overflowX: string; width: string }[] = []
+      let parent = el.parentElement
+      while (parent && parent !== document.body) {
+        const cs = window.getComputedStyle(parent)
+        if (
+          cs.overflow === 'auto' ||
+          cs.overflow === 'scroll' ||
+          cs.overflowX === 'auto' ||
+          cs.overflowX === 'scroll'
+        ) {
+          scrollParents.push({
+            el: parent as HTMLElement,
+            overflow: parent.style.overflow,
+            overflowX: parent.style.overflowX,
+            width: parent.style.width,
           })
-        })
-      }
-
-      clone.querySelectorAll('[data-save-btn], .save-btn, [data-hide-in-export]').forEach((el) => {
-        (el as HTMLElement).style.display = 'none'
-      })
-
-      const coverageRow = clone.querySelector('tr[data-row="coverage"]')
-      if (coverageRow) {
-        const select = coverageRow.querySelector('select')
-        if (select) {
-          const opt = select.options[select.selectedIndex]
-          const span = document.createElement('span')
-          span.className = 'text-xs text-slate-600'
-          span.textContent = opt?.text ?? '—'
-          select.parentNode?.replaceChild(span, select)
+          parent.style.overflow = 'visible'
+          parent.style.overflowX = 'visible'
+          parent.style.width = `${fullWidth}px`
         }
-        const input = coverageRow.querySelector('input[type="text"]')
-        if (input) {
-          const span = document.createElement('span')
-          span.className = 'text-xs text-slate-700'
-          span.textContent = (input as HTMLInputElement).value?.trim() || '—'
-          input.parentNode?.replaceChild(span, input)
-        }
+        parent = parent.parentElement
       }
 
-      clone.querySelectorAll('.shift-pill, td[data-cell-type="shift"]').forEach((pill) => {
-        const el = pill as HTMLElement
-        const text = (el.textContent ?? '').trim()
-        const isOFF = /^OFF$/i.test(text)
-        const isPTO = /^PTO$/i.test(text)
-        const isSick = /^Sick$/i.test(text)
-        el.style.cssText += `
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          border-radius: 8px !important;
-          padding: 6px 8px !important;
-          font-size: 0.75rem !important;
-          font-weight: ${isOFF || isPTO ? '700' : '500'} !important;
-          background: ${isOFF ? '#fff0ef' : isPTO ? '#fff8e1' : isSick ? '#f0fdf4' : '#eef1f8'} !important;
-          border: 1px solid ${isOFF ? '#ffd5d3' : isPTO ? '#ffe082' : isSick ? '#bbf7d0' : '#dde3f0'} !important;
-          color: ${isOFF ? '#e53935' : isPTO ? '#f59e0b' : isSick ? '#16a34a' : '#1a2332'} !important;
-          width: 100% !important;
-          box-sizing: border-box !important;
-          white-space: nowrap !important;
-        `
-      })
-
-      const powerHourRow = clone.querySelector('[data-row="power-hour"], .power-hour-row')
-      if (powerHourRow) (powerHourRow as HTMLElement).style.background = '#fffbf5'
-
-      const actualHoursRow = clone.querySelector('[data-row="actual-hours"], .actual-hours-row')
-      if (actualHoursRow) {
-        (actualHoursRow as HTMLElement).style.background = '#0e1f3d'
-        actualHoursRow.querySelectorAll('*').forEach((c) => ((c as HTMLElement).style.color = '#ffffff'))
-      }
+      const saveBtn = el.querySelector('[data-save-btn]')
+      if (saveBtn) (saveBtn as HTMLElement).style.visibility = 'hidden'
 
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
-      await new Promise((r) => setTimeout(r, 250))
 
-      const cloneHeight = wrapper.scrollHeight
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        scrollX: -window.scrollX,
+        scrollY: -window.scrollY,
+        windowWidth: fullWidth,
+        windowHeight: el.scrollHeight,
+        logging: false,
+        imageTimeout: 0,
+      } as Parameters<typeof html2canvas>[1])
 
-      let canvas: HTMLCanvasElement
-      try {
-        canvas = await html2canvas(wrapper, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: '#ffffff',
-          scrollX: 0,
-          scrollY: 0,
-          x: 0,
-          y: 0,
-          width: fullWidth,
-          height: cloneHeight,
-          windowWidth: fullWidth,
-          windowHeight: cloneHeight,
-          logging: false,
-          imageTimeout: 0,
-          removeContainer: false,
-        } as Parameters<typeof html2canvas>[1])
-      } finally {
-        if (document.body.contains(wrapper)) document.body.removeChild(wrapper)
-      }
+      el.style.width = prevWidth
+      el.style.minWidth = prevMinWidth
+      el.style.overflow = prevOverflow
+      scrollParents.forEach((sp) => {
+        sp.el.style.overflow = sp.overflow
+        sp.el.style.overflowX = sp.overflowX
+        sp.el.style.width = sp.width
+      })
+      if (saveBtn) (saveBtn as HTMLElement).style.visibility = ''
 
       const weekEnd = addDays(weekStart, 6)
       const weekLabel = `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}, ${format(weekStart, 'yyyy')}`
@@ -1089,6 +1007,7 @@ export function ScheduleGrid({
                               employeeName={emp}
                               dayOfWeek={day}
                               isPtoFromRequest={cellResult?.type === 'PTO'}
+                              isLockedByRto={cellResult?.type === 'OFF' || cellResult?.type === 'PTO'}
                             />
                           </div>
                         </td>
