@@ -57,6 +57,21 @@ Internal management tool for Brooklinen — scheduling, daily ops, and retail op
 
 ---
 
+## RTO submission page (go live)
+
+The **Request Time Off** form is public (no login). Associates can submit RTO/PTO/Partial requests; store leaders approve or deny in Backstage.
+
+**Production URL (after deploy):**
+- General: `https://YOUR_APP.vercel.app/rto/submit`
+- Per store (form pre-selects store): `https://YOUR_APP.vercel.app/rto/submit?store=101` (use store id: 101–109)
+
+**To go live:**
+1. Set **`NEXT_PUBLIC_APP_URL`** in Vercel to your production URL (e.g. `https://brooklinen-backstage.vercel.app`) so “Copy link” in the app uses the correct domain.
+2. Share the link with store leaders; they can copy the form link from the RTO tab (per store) or from the “Share this form” section on the submit page.
+3. Store leaders open **RTO** in Backstage to see pending requests and approve/deny; employees get email if **RESEND_API_KEY** is set.
+
+---
+
 ## Security
 
 - Auth required for all routes except `/login` and RTO submit.

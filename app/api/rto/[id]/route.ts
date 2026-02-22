@@ -5,6 +5,7 @@ import { rtoRequests } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isStoreLeader } from '@/lib/roles'
+import { applyRtoApprovalToAvailabilityAndSchedule } from '@/lib/rtoAvailabilitySync'
 
 const patchSchema = z.object({
   status: z.enum(['approved', 'denied', 'pending']),
@@ -47,6 +48,22 @@ export async function PATCH(
       })
       .where(eq(rtoRequests.id, id))
       .returning()
+
+    // When approved: update availability and schedule so OFF/PTO/partial show on schedule
+    if (status === 'approved') {
+      try {
+        await applyRtoApprovalToAvailabilityAndSchedule({
+          storeId: existing.storeId,
+          employeeName: existing.employeeName,
+          employeeEmail: existing.employeeEmail,
+          requestedDays: existing.requestedDays,
+          type: existing.type,
+          partialTime: existing.partialTime,
+        })
+      } catch (e) {
+        console.error('Failed to sync RTO approval to availability/schedule:', e)
+      }
+    }
 
     // Send email notification if approved/denied
     if (status !== 'pending') {

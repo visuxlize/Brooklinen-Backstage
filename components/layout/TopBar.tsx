@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Chip } from '@/components/ui/Chip'
 import { BrooklinenLogo } from '@/components/ui/BrooklinenLogo'
 import { useStore } from '@/lib/store-context'
+import { RTO_SUBMIT_URL } from '@/lib/app-config'
 
 interface TopBarProps {
   currentUser: {
@@ -20,12 +21,13 @@ interface TopBarProps {
   sidebarOpen?: boolean
 }
 
-type Tab = { label: string; href: string; badge?: number }
+type Tab = { label: string; href: string; badge?: number; isRtoSubmit?: boolean }
 
 function buildTabs(role: string, storeId: number | null, pendingRtoCount: number): Tab[] {
   const storeParam = storeId ? `?store=${storeId}` : ''
-  if (role === 'ops' || role === 'area_manager' || role === 'leader') {
+  if (role === 'ops' || role === 'area_manager' || role === 'store_leader' || role === 'leader') {
     return [
+      { label: 'Dashboard', href: `/dashboard${storeParam}` },
       { label: 'Schedule', href: `/schedule${storeParam}` },
       { label: 'Daily Ops', href: `/daily-ops${storeParam}` },
       { label: 'Availability', href: `/availability${storeParam}` },
@@ -34,8 +36,9 @@ function buildTabs(role: string, storeId: number | null, pendingRtoCount: number
     ]
   }
   return [
+    { label: 'Dashboard', href: `/dashboard${storeParam}` },
     { label: 'Schedule', href: `/schedule${storeParam}` },
-    { label: 'My Requests', href: `/rto/submit${storeParam}` },
+    { label: 'My Requests', href: RTO_SUBMIT_URL, isRtoSubmit: true },
   ]
 }
 
@@ -87,17 +90,21 @@ export function TopBar({ currentUser, onToggleSidebar, pendingRtoCount = 0, side
       {/* Tab nav */}
       <nav className="flex-1 flex items-center gap-1 overflow-x-auto min-w-0">
         {tabs.map((tab) => {
-          const active = isActive(tab.href.split('?')[0])
+          const active = !tab.isRtoSubmit && isActive(tab.href.split('?')[0])
+          const buttonClass = `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+            active
+              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-800'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'
+          } ${tab.isRtoSubmit ? 'bg-[var(--brand-navy)] text-white hover:opacity-90 border-0' : ''}`
+          if (tab.isRtoSubmit) {
+            return (
+              <a key={tab.label} href={tab.href} className={buttonClass}>
+                {tab.label}
+              </a>
+            )
+          }
           return (
-            <Link
-              key={tab.label}
-              href={tab.href}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                active
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-blue-800'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'
-              }`}
-            >
+            <Link key={tab.label} href={tab.href} className={buttonClass}>
               {tab.label}
               {tab.badge !== undefined && tab.badge > 0 && (
                 <span className="bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">

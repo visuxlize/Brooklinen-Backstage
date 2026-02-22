@@ -1,4 +1,5 @@
 import { RTOSubmitForm } from '@/components/rto/RTOSubmitForm'
+import { ShareRtoLink } from '@/components/rto/ShareRtoLink'
 import { BrooklinenLogo } from '@/components/ui/BrooklinenLogo'
 
 interface RtoSubmitPageProps {
@@ -24,6 +25,7 @@ export default async function RtoSubmitPage({ searchParams }: RtoSubmitPageProps
         </div>
         <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-6">
           <RTOSubmitForm defaultStoreId={defaultStoreId} />
+          <ShareRtoLink />
         </div>
       </div>
     </div>

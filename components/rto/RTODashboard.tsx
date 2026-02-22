@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Check, X, RotateCcw, Copy, CheckCheck } from 'lucide-react'
+import { Check, X, RotateCcw, ExternalLink } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
 import { RTOStatusBadge } from './RTOStatusBadge'
 import { Button } from '@/components/ui/Button'
 import type { StoreConfig } from '@/lib/stores'
+import { RTO_SUBMIT_URL } from '@/lib/app-config'
 
 interface RtoRequest {
   id: string
@@ -33,9 +34,6 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
   const [actionState, setActionState] = useState<Record<string, 'idle' | 'approving' | 'denying' | 'loading'>>({})
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({})
   const [activeAction, setActiveAction] = useState<Record<string, 'approve' | 'deny' | null>>({})
-  const [copied, setCopied] = useState(false)
-
-  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/rto/submit?store=${store.id}`
 
   async function fetchRequests() {
     setLoading(true)
@@ -70,12 +68,6 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
     } finally {
       setActionState((prev) => ({ ...prev, [id]: 'idle' }))
     }
-  }
-
-  function handleCopyLink() {
-    navigator.clipboard.writeText(shareUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
   }
 
   const pending = requests.filter((r) => r.status === 'pending')
@@ -221,18 +213,22 @@ export function RTODashboard({ store, currentUser }: RTODashboardProps) {
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{store.name} · {store.city}</p>
       </div>
 
-      {/* Shareable link */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-4 mb-6 flex items-center gap-3 flex-wrap">
-        <div className="flex-1 min-w-0">
+      {/* Associate submission — open form in same tab */}
+      <div className="bg-white dark:bg-slate-800/50 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-600 p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
+        <div>
           <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-400 mb-1">
-            Associate Submission Link
+            Associate Submission
           </div>
-          <div className="text-sm text-slate-600 dark:text-slate-200 font-mono truncate">{shareUrl}</div>
+          <p className="text-sm text-slate-600 dark:text-slate-300">Share the RTO form with associates so they can submit requests.</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleCopyLink} className="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
-          {copied ? <CheckCheck className="w-4 h-4 text-green-600 dark:text-green-400" /> : <Copy className="w-4 h-4" />}
-          {copied ? 'Copied!' : 'Copy'}
-        </Button>
+        <a
+          href={RTO_SUBMIT_URL}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: 'var(--brand-navy)' }}
+        >
+          <ExternalLink className="w-4 h-4" />
+          Open RTO submission form
+        </a>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
