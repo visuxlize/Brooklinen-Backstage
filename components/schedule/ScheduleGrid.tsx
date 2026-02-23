@@ -830,13 +830,13 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
             ))}
           </div>
         ) : (
-            <table data-schedule-table className="w-full min-w-[700px] border-collapse">
+            <table data-schedule-table className="w-full min-w-[920px] border-collapse">
             <thead>
               <tr data-row="header" className="bg-[var(--brand-navy)] text-white border-b-0" style={{ backgroundColor: '#0e1f3d' }}>
-                <th className="text-left px-4 py-3 w-52 rounded-tl-lg">
+                <th className="text-left px-5 py-4 w-56 min-w-[11rem] rounded-tl-lg">
                   <span className="text-xs font-semibold uppercase tracking-widest text-white/80">Employee</span>
                 </th>
-                <th className="px-3 py-3 text-center w-14">
+                <th className="px-4 py-4 text-center w-16 min-w-[4rem]">
                   <span className="text-xs font-semibold uppercase tracking-widest text-white/80">WTD</span>
                 </th>
                 {DAYS.map((day, i) => {
@@ -844,46 +844,46 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                   const dayKey = DAY_KEYS[i]
                   const storeHour = storeHours[dayKey] ?? '11AM–7PM'
                   return (
-                    <th key={day} className={`px-2 py-3 text-center ${i === DAYS.length - 1 ? 'rounded-tr-lg' : ''}`}>
+                    <th key={day} className={`px-3 py-4 text-center min-w-[7rem] ${i === DAYS.length - 1 ? 'rounded-tr-lg' : ''}`}>
                       <div className="text-xs font-semibold">{day}, {format(dayDate, 'MMM d')}</div>
-                      <div className="text-xs font-normal" style={{ color: '#8a94a6' }}>{storeHour}</div>
+                      <div className="text-xs font-normal mt-0.5" style={{ color: '#8a94a6' }}>{storeHour}</div>
                     </th>
                   )
                 })}
               </tr>
               <tr data-row="budget-goal" className="bg-slate-100 dark:bg-slate-700/80 border-b border-slate-200 dark:border-slate-600">
-                <th className="text-left px-4 py-1.5 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <th className="text-left px-5 py-2.5 w-56 min-w-[11rem] text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Daily budget goal
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold text-slate-800 dark:text-slate-100 w-14">
+                <th className="px-4 py-2.5 text-center text-xs font-semibold text-slate-800 dark:text-slate-100 w-16 min-w-[4rem]">
                   {formatCurrency(weeklyBudget)}
                 </th>
                 {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                  <th key={i} className="px-2 py-1.5 text-center text-xs font-medium text-slate-700 dark:text-slate-200">
+                  <th key={i} className="px-3 py-2.5 text-center text-xs font-medium text-slate-700 dark:text-slate-200">
                     {formatCurrency(dailyBudget[i] ?? 0)}
                   </th>
                 ))}
               </tr>
               <tr data-row="ly-budget" className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-600">
-                <th className="text-left px-4 py-1.5 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <th className="text-left px-5 py-2.5 w-56 min-w-[11rem] text-xs font-semibold text-slate-600 dark:text-slate-300">
                   Daily LY budget
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold text-slate-800 dark:text-slate-100 w-14">
+                <th className="px-4 py-2.5 text-center text-xs font-semibold text-slate-800 dark:text-slate-100 w-16 min-w-[4rem]">
                   {formatCurrency(weeklyLy)}
                 </th>
                 {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                  <th key={i} className="px-2 py-1.5 text-center text-xs font-medium text-slate-700 dark:text-slate-200">
+                  <th key={i} className="px-3 py-2.5 text-center text-xs font-medium text-slate-700 dark:text-slate-200">
                     {formatCurrency(dailyLy[i] ?? 0)}
                   </th>
                 ))}
               </tr>
-              <tr data-row="promotions" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 [&>td]:min-h-[2.75rem] [&>td]:overflow-visible">
-                <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
+              <tr data-row="promotions" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 [&>td]:min-h-[3.25rem] [&>td]:overflow-visible">
+                <td className="px-5 py-3 w-56 min-w-[11rem] text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Promotions
                 </td>
-                <td className="px-2 py-1.5 w-14 border-l border-slate-100 dark:border-slate-600/80" />
+                <td className="px-4 py-3 w-16 min-w-[4rem] border-l border-slate-100 dark:border-slate-600/80" />
                 {DAY_KEYS.map((dayKey) => (
-                  <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80 min-h-[2.75rem] overflow-visible">
+                  <td key={dayKey} className="px-3 py-3 align-middle border-l border-slate-100 dark:border-slate-600/80 min-h-[3.25rem] overflow-visible">
                     {canEdit ? (
                       <input
                         type="text"
@@ -891,21 +891,21 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                         onChange={(e) => setPromotions((prev) => ({ ...prev, [dayKey]: e.target.value }))}
                         onBlur={() => saveWeekMeta({ promotions })}
                         placeholder="—"
-                        className="w-full min-w-0 px-2 py-1.5 text-sm text-center border border-transparent rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none min-h-[2rem]"
+                        className="w-full min-w-0 px-3 py-2 text-sm text-center border border-transparent rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none min-h-[2.25rem]"
                       />
                     ) : (
-                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center break-words whitespace-normal overflow-visible min-h-[1.5rem]">{promotions[dayKey]?.trim() || '—'}</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center break-words whitespace-normal overflow-visible leading-relaxed py-0.5">{promotions[dayKey]?.trim() || '—'}</span>
                     )}
                   </td>
                 ))}
               </tr>
-              <tr data-row="workload" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 [&>td]:min-h-[2.75rem] [&>td]:overflow-visible">
-                <td className="px-4 py-2 w-52 text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
+              <tr data-row="workload" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 [&>td]:min-h-[3.25rem] [&>td]:overflow-visible">
+                <td className="px-5 py-3 w-56 min-w-[11rem] text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Workload
                 </td>
-                <td className="px-2 py-1.5 w-14 border-l border-slate-100 dark:border-slate-600/80" />
+                <td className="px-4 py-3 w-16 min-w-[4rem] border-l border-slate-100 dark:border-slate-600/80" />
                 {DAY_KEYS.map((dayKey) => (
-                  <td key={dayKey} className="px-2 py-1.5 align-middle border-l border-slate-100 dark:border-slate-600/80 min-h-[2.75rem] overflow-visible">
+                  <td key={dayKey} className="px-3 py-3 align-middle border-l border-slate-100 dark:border-slate-600/80 min-h-[3.25rem] overflow-visible">
                     {canEdit ? (
                       <input
                         type="text"
@@ -913,10 +913,10 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                         onChange={(e) => setWorkload((prev) => ({ ...prev, [dayKey]: e.target.value }))}
                         onBlur={() => saveWeekMeta({ workload })}
                         placeholder="—"
-                        className="w-full min-w-0 px-2 py-1.5 text-sm text-center border border-transparent rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none min-h-[2rem]"
+                        className="w-full min-w-0 px-3 py-2 text-sm text-center border border-transparent rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 hover:border-slate-200 dark:hover:border-slate-600 focus:border-[var(--brand-navy)] focus:outline-none min-h-[2.25rem]"
                       />
                     ) : (
-                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center break-words whitespace-normal overflow-visible min-h-[1.5rem]">{workload[dayKey]?.trim() || '—'}</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-300 block text-center break-words whitespace-normal overflow-visible leading-relaxed py-0.5">{workload[dayKey]?.trim() || '—'}</span>
                     )}
                   </td>
                 ))}
@@ -947,8 +947,8 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                       isDragging ? 'opacity-50 bg-slate-100 dark:bg-slate-700/50' : 'hover:bg-slate-50/50 dark:hover:bg-slate-700/20'
                     } ${isDropTarget ? 'ring-1 ring-inset ring-[var(--brand-navy)] bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
                   >
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <div
                           draggable
                           onDragStart={(e) => handleDragStart(e, index)}
@@ -959,15 +959,15 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                           <GripVertical className="w-4 h-4" />
                         </div>
                         <Avatar name={emp} size="sm" color={store.color} />
-                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{emp}</span>
+                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate min-w-0">{emp}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-4 py-3 text-center">
                       <div
-                        className="text-sm font-bold"
+                        className="text-sm font-bold tabular-nums"
                         style={{ color: store.color }}
                       >
-                        {weekTotal}h
+                        {weekTotal}<span className="font-semibold text-slate-600 dark:text-slate-400 ml-0.5">h</span>
                       </div>
                       {isOT && (
                         <div className="text-xs font-semibold text-red-600 dark:text-red-400">OT</div>
@@ -1015,7 +1015,7 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                           key={day}
                           data-cell-type={cellValue && cellValue !== '—' ? 'shift' : 'empty'}
                           data-value={cellValue || ''}
-                          className={`px-1.5 py-1.5 ${isCopySource ? 'ring-2 ring-[var(--brand-navy)] ring-offset-1 rounded-lg' : ''} ${(isNa || isOffOrPto) ? 'opacity-90' : ''} ${hasPartialConflict ? 'ring-2 ring-red-500 ring-offset-1 rounded-lg bg-red-50/80 dark:bg-red-900/20' : ''} ${coverageAwayHere ? 'bg-amber-50/80 dark:bg-amber-900/20' : ''}`}
+                          className={`px-2.5 py-3 ${isCopySource ? 'ring-2 ring-[var(--brand-navy)] ring-offset-1 rounded-lg' : ''} ${(isNa || isOffOrPto) ? 'opacity-90' : ''} ${hasPartialConflict ? 'ring-2 ring-red-500 ring-offset-1 rounded-lg bg-red-50/80 dark:bg-red-900/20' : ''} ${coverageAwayHere ? 'bg-amber-50/80 dark:bg-amber-900/20' : ''}`}
                           onClick={canEdit && copySource && (copySource.employeeName !== emp || copySource.dayOfWeek !== day) ? () => handleCellClickForCopy(emp, day) : undefined}
                           onContextMenu={(e) => handleCellContextMenu(e, emp, day)}
                           title={cellTitle ?? (coverageAwayHere ? `Covering at ${coverageAwayHere.atStoreName}` : undefined)}
@@ -1067,7 +1067,7 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                   </td>
                   <td className="px-3 py-2 text-center text-slate-400 dark:text-slate-500 text-sm">—</td>
                   {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-                    <td key={day} className="px-1.5 py-1.5">
+                    <td key={day} className="px-2.5 py-3">
                       <ShiftCell
                         value={addCoverageCells[day] ?? ''}
                         onChange={(val) => handleAddCoverageCellChange(day, val)}

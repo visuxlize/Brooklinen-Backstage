@@ -139,7 +139,7 @@ export function ShiftCell({
 
   if (editing && !readOnly) {
     return (
-      <div className="relative w-full h-full min-h-[40px]">
+      <div className="relative w-full h-full min-h-[52px]">
         <input
           ref={inputRef}
           value={inputVal}
@@ -147,7 +147,7 @@ export function ShiftCell({
           onKeyDown={handleKeyDown}
           onBlur={commit}
           placeholder="10AM–6PM"
-          className="w-full h-full min-h-[40px] px-2 py-1 text-xs text-center rounded-lg focus:outline-none border-2 bg-white dark:bg-slate-700 dark:text-slate-100 dark:border-slate-500 dark:placeholder-slate-400"
+          className="w-full h-full min-h-[52px] px-2.5 py-2 text-xs text-center rounded-lg focus:outline-none border-2 bg-white dark:bg-slate-700 dark:text-slate-100 dark:border-slate-500 dark:placeholder-slate-400"
           style={{ borderColor: storeColor }}
         />
       </div>
@@ -158,7 +158,7 @@ export function ShiftCell({
     <div className="relative" ref={cellRef}>
       <div
         className={cn(
-          'w-full min-h-[40px] flex items-center justify-center text-xs font-medium px-1 transition-all cursor-default select-none',
+          'w-full min-h-[52px] flex items-center justify-center text-xs font-medium px-2.5 py-2 rounded-lg transition-all cursor-default select-none overflow-visible',
           getCellClasses(),
           !readOnly && 'hover:-translate-y-0.5 hover:shadow-sm cursor-pointer',
           isLockedByRto && readOnly && 'cursor-not-allowed opacity-90'
@@ -168,7 +168,7 @@ export function ShiftCell({
         onContextMenu={handleContextMenu}
         title={isLockedByRto && readOnly ? 'Approved time off — undo in RTO tab to edit' : undefined}
       >
-        <span className="text-center leading-tight flex items-center gap-1">
+        <span className="text-center leading-normal flex items-center justify-center gap-1 flex-wrap break-words">
           {isEmpty ? '—' : value}
           {isLockedByRto && readOnly && (
             <Lock className="w-3 h-3 flex-shrink-0 opacity-60" aria-hidden />
