@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Palmtree, RefreshCw, Thermometer, X, Copy, ClipboardPaste, Lock } from 'lucide-react'
 import { getShiftType, SHIFT_TYPES, normalizeShiftDisplay } from '@/lib/shiftUtils'
 import { cn } from '@/lib/utils'
@@ -47,6 +48,7 @@ export function ShiftCell({
   const [editing, setEditing] = useState(false)
   const [inputVal, setInputVal] = useState(value ?? '')
   const [showPopover, setShowPopover] = useState(false)
+  const [popoverPlacement, setPopoverPlacement] = useState<{ top: number; left: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const cellRef = useRef<HTMLDivElement>(null)
 
@@ -86,8 +88,25 @@ export function ShiftCell({
     if (readOnly) return
     e.preventDefault()
     e.stopPropagation()
+    if (cellRef.current) {
+      const rect = cellRef.current.getBoundingClientRect()
+      const menuHeight = 320
+      const menuWidth = 176
+      const gap = 4
+      const viewportH = window.innerHeight
+      const viewportW = window.innerWidth
+      const spaceBelow = viewportH - rect.bottom
+      const openUp = spaceBelow < menuHeight && rect.top > menuHeight + gap
+      const top = openUp ? rect.top - menuHeight - gap : rect.bottom + gap
+      const left = Math.max(8, Math.min(rect.left + rect.width / 2 - menuWidth / 2, viewportW - menuWidth - 8))
+      setPopoverPlacement({ top, left })
+    }
     setShowPopover(true)
   }
+
+  useEffect(() => {
+    if (!showPopover) setPopoverPlacement(null)
+  }, [showPopover])
 
   function handleQuickSet(key: string) {
     onChange(key)
@@ -157,14 +176,19 @@ export function ShiftCell({
         </span>
       </div>
 
-      {/* Quick-set popover */}
-      {showPopover && !readOnly && (
+      {/* Quick-set popover — rendered in portal with fixed position so it isn't clipped by overflow */}
+      {showPopover && !readOnly && typeof document !== 'undefined' && popoverPlacement && createPortal(
         <>
           <div
             className="fixed inset-0 z-40"
             onClick={() => setShowPopover(false)}
+            aria-hidden
           />
-          <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-600 p-3 w-44">
+          <div
+            className="fixed z-50 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-600 p-3 w-44"
+            style={{ top: popoverPlacement.top, left: popoverPlacement.left }}
+            role="menu"
+          >
             <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-400 mb-2 px-1">
               Quick Set
             </div>
@@ -205,6 +229,7 @@ export function ShiftCell({
                 return (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => handleQuickSet(key)}
                     className={cn(
                       'flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold border transition-colors hover:opacity-80',
@@ -224,6 +249,7 @@ export function ShiftCell({
                 )
               })}
               <button
+                type="button"
                 onClick={handleClear}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors mt-1"
               >
@@ -232,7 +258,8 @@ export function ShiftCell({
               </button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )
