@@ -333,7 +333,9 @@ export function EmailPreviewClient({ allowedStores, initialStoreId }: EmailPrevi
                           initialWeeklyLy={scheduleData.initialWeeklyLy}
                           initialDailyBudget={scheduleData.initialDailyBudget}
                           initialDailyLy={scheduleData.initialDailyLy}
-                          initialApprovedRtoRequests={scheduleData.initialApprovedRtoRequests}
+                          initialApprovedRtoRequests={scheduleData.initialApprovedRtoRequests
+                            .filter((r): r is typeof r & { startDate: string; endDate: string } => r.startDate != null && r.endDate != null)
+                            .map((r) => ({ ...r, requestedDays: r.requestedDays ?? undefined }))}
                           initialWeekMeta={scheduleData.initialWeekMeta ?? undefined}
                           previewMode
                         />
