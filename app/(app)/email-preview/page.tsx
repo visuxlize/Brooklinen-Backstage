@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Mail, FileText } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Mail, FileText, Loader2, AlertCircle } from 'lucide-react'
 
 type TemplateType = 'schedule' | 'rto'
 
@@ -10,11 +10,43 @@ export default function EmailPreviewPage() {
   const [storeName, setStoreName] = useState('Williamsburg')
   const [dateRange, setDateRange] = useState('Feb 22 – Feb 28, 2026')
   const [status, setStatus] = useState<'approved' | 'denied'>('approved')
+  const [html, setHtml] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const previewUrl =
     template === 'schedule'
       ? `/api/email/preview?template=schedule&storeName=${encodeURIComponent(storeName)}&dateRange=${encodeURIComponent(dateRange)}`
       : `/api/email/preview?template=rto&status=${status}`
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    fetch(previewUrl, { credentials: 'include' })
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 401 ? 'Please sign in' : `Preview failed (${res.status})`)
+        return res.text()
+      })
+      .then((text) => {
+        if (!cancelled) {
+          setHtml(text)
+          setError(null)
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Could not load preview')
+          setHtml('')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [previewUrl])
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
@@ -100,14 +132,25 @@ export default function EmailPreviewPage() {
           </a>
         </div>
 
-        <div className="flex-1 min-h-[420px] rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 overflow-hidden">
-          <iframe
-            key={previewUrl}
-            src={previewUrl}
-            title="Email preview"
-            className="w-full h-full min-h-[420px] border-0 bg-white dark:bg-slate-900"
-            sandbox="allow-same-origin"
-          />
+        <div className="flex-1 min-h-[420px] rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/50 overflow-auto">
+          {loading && (
+            <div className="flex items-center justify-center min-h-[320px] text-slate-500 dark:text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          )}
+          {error && !loading && (
+            <div className="flex flex-col items-center justify-center min-h-[320px] gap-2 text-slate-600 dark:text-slate-400">
+              <AlertCircle className="w-10 h-10 text-amber-500" />
+              <p className="text-sm font-medium">{error}</p>
+            </div>
+          )}
+          {!loading && !error && html && (
+            <div
+              className="min-h-[320px] bg-[#f8fafc] p-6"
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          )}
         </div>
       </div>
     </div>
