@@ -45,7 +45,7 @@ export async function GET(request: Request) {
 
   const [storeRow] = await db.select().from(stores).where(eq(stores.id, storeId)).limit(1)
   const store: StoreConfig = storeRow
-    ? { id: storeRow.id, name: storeRow.name, city: storeRow.city, color: storeRow.color, hours: storeRow.hours as Record<string, string> }
+    ? ({ id: storeRow.id, name: storeRow.name, city: storeRow.city, color: storeRow.color, hours: storeRow.hours as Record<string, string> } as StoreConfig)
     : staticStore
 
   const weekStart = getWeekStartByIndex(weekIndex)
