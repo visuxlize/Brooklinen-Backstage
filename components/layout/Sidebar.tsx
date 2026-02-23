@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, Search, Users, Sun, Moon } from 'lucide-react'
+import { LogOut, Search, Users, Sun, Moon, Mail } from 'lucide-react'
 import { BrooklinenLogo } from '@/components/ui/BrooklinenLogo'
 import { STORE_CONFIG } from '@/lib/stores'
 import { ROLE_LABELS, normalizeRole } from '@/lib/roles'
@@ -127,7 +127,7 @@ export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProp
           })}
         </nav>
 
-        {/* User Management (OPS, Area Manager, Store Leader) */}
+        {/* User Management + Email templates (OPS, Area Manager, Store Leader) */}
         {canAccessAdmin && (
           <div className="px-4 py-2 border-t border-white/10">
             <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 block px-4 py-2">Management</span>
@@ -139,6 +139,15 @@ export function Sidebar({ currentUser, pendingCounts = {}, isOpen }: SidebarProp
             >
               <Users className="w-4 h-4 text-slate-400 flex-shrink-0" />
               <span className="text-sm font-medium text-white">User Management</span>
+            </Link>
+            <Link
+              href="/email-preview"
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                pathname === '/email-preview' ? 'bg-white/10' : 'hover:bg-white/5'
+              }`}
+            >
+              <Mail className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <span className="text-sm font-medium text-white">Email templates</span>
             </Link>
           </div>
         )}

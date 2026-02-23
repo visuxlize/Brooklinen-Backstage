@@ -11,8 +11,17 @@ import {
   getPlusMinusColor,
 } from '@/lib/daily-ops/formatters'
 import { STORE_CONFIG } from '@/lib/stores'
-import type { DailyOpsActuals } from '@/lib/daily-ops/types'
+import type { DailyOpsActuals, RecapNotes } from '@/lib/daily-ops/types'
 import { CleanSelect } from './CleanSelect'
+
+const RECAP_SECTION_LABELS: { key: keyof RecapNotes; label: string }[] = [
+  { key: 'overallSales', label: 'Overall Sales' },
+  { key: 'traffic', label: 'Traffic' },
+  { key: 'conversion', label: 'Conversion' },
+  { key: 'promotionPerformance', label: 'Promotion / Product Newness Performance' },
+  { key: 'retailOpsAlerts', label: 'Retail Operations / Inventory Alerts' },
+  { key: 'storeClosingNotes', label: 'Store Closing Notes' },
+]
 
 const WEATHER_OPTIONS = [
   { value: '', label: '— Select —' },
@@ -40,6 +49,15 @@ function formatRecapDate(dateStr: string): string {
     year: 'numeric',
   })
 }
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 
 type ActualKey = 'netRevenue' | 'orders' | 'upt' | 'traffic' | 'returns' | 'aov' | 'cvr'
 
@@ -132,93 +150,76 @@ export function NightlyRecapPanel() {
   const formattedDate = formatRecapDate(selectedDate)
   const recapRef = useRef<HTMLDivElement>(null)
   const [savingImage, setSavingImage] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle')
 
   const handleSaveAsImage = async () => {
     const el = recapRef.current
     if (!el) return
     setSavingImage(true)
     try {
-      const clone = el.cloneNode(true) as HTMLElement
-      clone.style.cssText = `
-        position: fixed;
-        top: -9999px;
-        left: 0;
-        width: ${el.offsetWidth}px;
-        background: #ffffff;
-        overflow: visible;
-      `
-      document.body.appendChild(clone)
+      const fullWidth = el.scrollWidth
+      const fullHeight = el.scrollHeight
+      const prevWidth = el.style.width
+      const prevMinWidth = el.style.minWidth
+      const prevOverflow = el.style.overflow
+      const prevOverflowY = el.style.overflowY
 
-      clone.querySelectorAll('.clean-select-trigger').forEach((btn) => {
-        const span = document.createElement('span')
-        span.textContent = (btn.textContent ?? '').replace(/[\u2039\u203A▼▲⌄]/g, '').trim()
-        span.style.cssText = `
-          font-size: 0.95rem;
-          font-weight: 500;
-          color: #1a2332;
-          font-family: inherit;
-        `
-        btn.parentNode?.replaceChild(span, btn)
-      })
+      el.style.width = `${fullWidth}px`
+      el.style.minWidth = `${fullWidth}px`
+      el.style.overflow = 'visible'
+      el.style.overflowY = 'visible'
 
-      clone.querySelectorAll('.actual-sales-row input').forEach((inp) => {
-        const input = inp as HTMLInputElement
-        const rawVal = input.value
-        const parent = input.parentNode as HTMLElement
-        const isCurrency = parent?.querySelector('.input-prefix')
-        const displayText = rawVal ? (isCurrency ? `$${rawVal}` : rawVal) : '—'
-        const span = document.createElement('span')
-        span.textContent = displayText
-        span.style.cssText = `
-          font-size: inherit;
-          color: ${rawVal ? '#1a2332' : '#c5cdd8'};
-          font-weight: 400;
-          font-family: inherit;
-        `
-        if (parent && (parent.classList.contains('flex') || parent.querySelector('.input-prefix'))) {
-          parent.textContent = ''
-          parent.appendChild(span)
-        } else {
-          input.parentNode?.replaceChild(span, input)
+      const scrollParents: { el: HTMLElement; overflow: string; overflowY: string; width: string }[] = []
+      let parent = el.parentElement
+      while (parent && parent !== document.body) {
+        const cs = window.getComputedStyle(parent)
+        if (cs.overflow === 'auto' || cs.overflow === 'scroll' || cs.overflowY === 'auto' || cs.overflowY === 'scroll') {
+          scrollParents.push({
+            el: parent as HTMLElement,
+            overflow: parent.style.overflow,
+            overflowY: parent.style.overflowY,
+            width: parent.style.width,
+          })
+          parent.style.overflow = 'visible'
+          parent.style.overflowY = 'visible'
+          parent.style.width = `${fullWidth}px`
         }
+        parent = parent.parentElement
+      }
+
+      el.querySelectorAll('.recap-narrative-section').forEach((section) => {
+        const s = section as HTMLElement
+        s.style.minHeight = 'auto'
+        s.style.overflow = 'visible'
+        s.querySelectorAll('textarea, p').forEach((n) => {
+          (n as HTMLElement).style.overflow = 'visible'
+          ;(n as HTMLElement).style.wordWrap = 'break-word'
+        })
       })
 
-      clone.querySelectorAll('.recap-narrative-section').forEach((section) => {
-        const ta = section.querySelector('textarea')
-        if (!ta) return
-        if (!(ta as HTMLTextAreaElement).value.trim()) {
-          ;(section as HTMLElement).style.display = 'none'
-          return
-        }
-        const div = document.createElement('div')
-        div.textContent = (ta as HTMLTextAreaElement).value
-        div.style.cssText = `
-          white-space: pre-wrap;
-          word-wrap: break-word;
-          font-size: 0.95rem;
-          line-height: 1.7;
-          color: #1a2332;
-          padding: 12px 0 12px 14px;
-          border-left: 3px solid #2563eb;
-          font-family: inherit;
-        `
-        ta.parentNode?.replaceChild(div, ta)
-      })
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
 
-      await new Promise((r) => setTimeout(r, 120))
-
-      const canvas = await html2canvas(clone, {
+      const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: clone.offsetWidth,
-        windowHeight: clone.scrollHeight,
+        scrollX: -window.scrollX,
+        scrollY: -window.scrollY,
+        windowWidth: fullWidth,
+        windowHeight: fullHeight,
         logging: false,
+        imageTimeout: 0,
       } as Parameters<typeof html2canvas>[1])
 
-      document.body.removeChild(clone)
+      el.style.width = prevWidth
+      el.style.minWidth = prevMinWidth
+      el.style.overflow = prevOverflow
+      el.style.overflowY = prevOverflowY
+      scrollParents.forEach((sp) => {
+        sp.el.style.overflow = sp.overflow
+        sp.el.style.overflowY = sp.overflowY
+        sp.el.style.width = sp.width
+      })
 
       const safeName = storeName.toLowerCase().replace(/\s+/g, '-')
       const safeDate = selectedDate.replace(/\s+/g, '-').toLowerCase()
@@ -231,9 +232,104 @@ export function NightlyRecapPanel() {
     }
   }
 
+  const buildCopyContent = () => {
+    const cols = COLS.map((c) => c.label)
+    const budgetRow = ['Budget Goals', ...COLS.map((c) => formatVal(c.key, budgetValues?.[c.key as keyof typeof budgetValues] ?? null))]
+    const lyRow = ['LY NR', ...COLS.map((c) => (c.key === 'traffic' || c.key === 'returns' ? '--' : formatVal(c.key, lyValues?.[c.key as keyof typeof lyValues] ?? null)))]
+    const actualRow = [
+      'Actual Sales',
+      ...COLS.map((c) => {
+        const val = actualDisplay[c.key as keyof typeof actualDisplay] ?? null
+        return formatVal(c.key, val)
+      }),
+    ]
+    const pctRow = [
+      '% Change (TY/Budget)',
+      ...COLS.map((c) => {
+        const budget = budgetValues?.[c.key as keyof typeof budgetValues] ?? null
+        const actual = actualDisplay[c.key as keyof typeof actualDisplay] ?? null
+        return formatPlusMinusPercent(actual, budget) ?? '--'
+      }),
+    ]
+    const tableLines = [
+      ['', ...cols].join('\t'),
+      budgetRow.join('\t'),
+      lyRow.join('\t'),
+      actualRow.join('\t'),
+      pctRow.join('\t'),
+    ]
+    const sectionLines: string[] = []
+    RECAP_SECTION_LABELS.forEach(({ key, label }) => {
+      const text = (recapNotes[key] ?? '').trim()
+      if (text) {
+        sectionLines.push(label)
+        sectionLines.push(text)
+        sectionLines.push('')
+      }
+    })
+    const plain = [
+      `${storeName}\t${formattedDate}`,
+      `Weather\t${recapWeather || '—'}\tIn-Store Event\t${recapInStoreEvent || '—'}`,
+      '',
+      'Nightly Recap Report',
+      '',
+      ...tableLines,
+      '',
+      ...sectionLines,
+    ].join('\r\n')
+
+    const htmlTableRows = [
+      `<tr><th></th>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr>`,
+      `<tr><td>Budget Goals</td>${budgetRow.slice(1).map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`,
+      `<tr><td>LY NR</td>${lyRow.slice(1).map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`,
+      `<tr><td>Actual Sales</td>${actualRow.slice(1).map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`,
+      `<tr><td>% Change (TY/Budget)</td>${pctRow.slice(1).map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`,
+    ]
+    const sectionsHtml = RECAP_SECTION_LABELS.map(({ key, label }) => {
+      const text = (recapNotes[key] ?? '').trim()
+      if (!text) return ''
+      return `<tr><td colspan="2"><strong>${escapeHtml(label)}</strong></td></tr><tr><td colspan="2" style="padding:8px 0;white-space:pre-wrap;">${escapeHtml(text)}</td></tr>`
+    }).filter(Boolean).join('')
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Nightly Recap - ${escapeHtml(storeName)} - ${escapeHtml(selectedDate)}</title></head><body style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;">
+<h1>${escapeHtml(storeName)} — ${escapeHtml(formattedDate)}</h1>
+<p><strong>Weather:</strong> ${escapeHtml(recapWeather || '—')} &nbsp; <strong>In-Store Event:</strong> ${escapeHtml(recapInStoreEvent || '—')}</p>
+<h2>Nightly Recap Report</h2>
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
+${htmlTableRows.join('\n')}
+</table>
+${sectionsHtml ? `<h3>Notes</h3><table border="0" cellpadding="4" style="border-collapse:collapse;">${sectionsHtml}</table>` : ''}
+</body></html>`
+    return { plain, html }
+  }
+
+  const handleCopy = async () => {
+    setCopyStatus('copying')
+    try {
+      const { plain, html } = buildCopyContent()
+      const blobHtml = new Blob([html], { type: 'text/html' })
+      const blobPlain = new Blob([plain], { type: 'text/plain' })
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'text/html': blobHtml, 'text/plain': blobPlain }),
+      ])
+      setCopyStatus('copied')
+      setTimeout(() => setCopyStatus('idle'), 2500)
+    } catch {
+      setCopyStatus('error')
+      setTimeout(() => setCopyStatus('idle'), 2500)
+    }
+  }
+
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={handleCopy}
+          disabled={copyStatus === 'copying'}
+          className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 rounded-lg disabled:opacity-50 transition-colors"
+        >
+          {copyStatus === 'copied' ? 'Copied!' : copyStatus === 'error' ? 'Copy failed' : copyStatus === 'copying' ? 'Copying…' : 'Copy (paste into Excel/Word)'}
+        </button>
         <button
           type="button"
           onClick={handleSaveAsImage}

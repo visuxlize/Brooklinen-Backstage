@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isStoreLeader } from '@/lib/roles'
 import { getResend } from '@/lib/resend'
+import { buildScheduleEmailHtml } from '@/lib/email-templates'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { and, eq } from 'drizzle-orm'
@@ -54,6 +55,12 @@ export async function POST(request: Request) {
     // Strip the data URL prefix
     const base64Data = imageBase64.replace(/^data:image\/png;base64,/, '')
 
+    const html = buildScheduleEmailHtml({
+      storeName: store.name,
+      dateRange,
+      imageAttachment: true,
+    })
+
     const resend = getResend()
     const results = await Promise.allSettled(
       emails.map((email) =>
@@ -61,21 +68,13 @@ export async function POST(request: Request) {
           from: 'Brooklinen Retail Ops <scheduling@brooklinen.com>',
           to: email,
           subject: `Schedule — ${store.name} — Week of ${weekStart}`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #0F1F3D; margin-bottom: 8px;">${store.name} Schedule</h2>
-              <p style="color: #64748B; margin-bottom: 24px;">Week of ${dateRange}</p>
-              <img src="cid:schedule" alt="Schedule" style="width: 100%; border-radius: 12px; border: 1px solid #E2E8F0;" />
-              <p style="color: #94A3B8; font-size: 12px; margin-top: 24px;">
-                — Brooklinen Retail Operations
-              </p>
-            </div>
-          `,
+          html,
           attachments: [
             {
               filename: `schedule-${store.name.toLowerCase().replace(/\s+/g, '-')}-${weekStart}.png`,
               content: base64Data,
               contentType: 'image/png',
+              contentId: 'schedule',
             },
           ],
         })
