@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import html2canvas from 'html2canvas'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { format, addDays } from 'date-fns'
@@ -45,6 +45,13 @@ interface ScheduleGridProps {
   initialAllowableHours?: number | null
   initialWeekMeta?: { workload: Record<string, string> | null; promotions: Record<string, string> | null; hoursOverride: Record<string, string> | null }
   initialApprovedRtoRequests?: (RtoRequestForSchedule & { startDate: string; endDate: string })[]
+  /** When true, hide week nav and email button; used for email template image preview. */
+  previewMode?: boolean
+}
+
+export interface ScheduleGridHandle {
+  /** Capture the schedule grid as PNG and return the data URL, or null on error. */
+  captureAsImage: () => Promise<string | null>
 }
 
 const SHIFT_LEGEND = [
@@ -54,26 +61,30 @@ const SHIFT_LEGEND = [
   { key: 'OFF' as const, icon: X },
 ]
 
-export function ScheduleGrid({
-  store,
-  canEdit,
-  employees: initialEmployees,
-  initialData,
-  weekStartDate,
-  initialWeekIdx,
-  totalWeeks,
-  currentUser,
-  initialWeeklyBudget = null,
-  initialWeeklyLy = null,
-  initialDailyBudget,
-  initialDailyLy,
-  initialBudgetHoursDaily,
-  initialTrendingHoursDaily,
-  initialPeakWindowByDay,
-  initialAllowableHours = null,
-  initialWeekMeta,
-  initialApprovedRtoRequests = [],
-}: ScheduleGridProps) {
+const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(function ScheduleGridInner(
+  {
+    store,
+    canEdit,
+    employees: initialEmployees,
+    initialData,
+    weekStartDate,
+    initialWeekIdx,
+    totalWeeks,
+    currentUser,
+    initialWeeklyBudget = null,
+    initialWeeklyLy = null,
+    initialDailyBudget,
+    initialDailyLy,
+    initialBudgetHoursDaily,
+    initialTrendingHoursDaily,
+    initialPeakWindowByDay,
+    initialAllowableHours = null,
+    initialWeekMeta,
+    initialApprovedRtoRequests = [],
+    previewMode = false,
+  },
+  ref
+) {
   const [weekIdx, setWeekIdx] = useState(initialWeekIdx)
   const [gridData, setGridData] = useState<GridData>(initialData)
   const [approvedRtoRequests, setApprovedRtoRequests] = useState<
@@ -430,10 +441,9 @@ export function ScheduleGrid({
     }
   }
 
-  async function handleSaveScheduleAsImage() {
+  async function captureScheduleAsImageDataUrl(): Promise<string | null> {
     const el = gridRef.current
-    if (!el) return
-    setEmailState('loading')
+    if (!el) return null
     try {
       const fullWidth = el.scrollWidth
       const prevWidth = el.style.width
@@ -495,20 +505,32 @@ export function ScheduleGrid({
       })
       if (saveBtn) (saveBtn as HTMLElement).style.visibility = ''
 
+      return canvas.toDataURL('image/png')
+    } catch {
+      return null
+    }
+  }
+
+  async function handleSaveScheduleAsImage() {
+    setEmailState('loading')
+    const dataUrl = await captureScheduleAsImageDataUrl()
+    if (dataUrl) {
       const weekEnd = addDays(weekStart, 6)
       const weekLabel = `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}, ${format(weekStart, 'yyyy')}`
       const safeStore = store.name.toLowerCase().replace(/\s+/g, '-')
       const safeWeek = weekLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
       const link = document.createElement('a')
       link.download = `schedule-${safeStore}-${safeWeek}.png`
-      link.href = canvas.toDataURL('image/png')
+      link.href = dataUrl
       link.click()
       setEmailState('sent')
       setTimeout(() => setEmailState('idle'), 2000)
-    } catch {
+    } else {
       setEmailState('idle')
     }
   }
+
+  useImperativeHandle(ref, () => ({ captureAsImage: captureScheduleAsImageDataUrl }), [])
 
   function handleCellClickForCopy(employeeName: string, dayOfWeek: number) {
     if (!copySource) {
@@ -668,25 +690,27 @@ export function ScheduleGrid({
         </div>
       )}
 
-      {/* Week navigation - compact */}
-      <WeekNav
-        weekIdx={weekIdx}
-        totalWeeks={totalWeeks}
-        weekStart={weekStart}
-        onPrev={() => {
-          const next = Math.max(0, weekIdx - 1)
-          setWeekIdx(next)
-          updateUrlWeek(next)
-        }}
-        onNext={() => {
-          const next = Math.min(totalWeeks - 1, weekIdx + 1)
-          setWeekIdx(next)
-          updateUrlWeek(next)
-        }}
-        canEmail={canEdit}
-        emailState={emailState}
-        onEmail={handleSaveScheduleAsImage}
-      />
+      {/* Week navigation - compact (hidden in preview mode; parent controls week) */}
+      {!previewMode && (
+        <WeekNav
+          weekIdx={weekIdx}
+          totalWeeks={totalWeeks}
+          weekStart={weekStart}
+          onPrev={() => {
+            const next = Math.max(0, weekIdx - 1)
+            setWeekIdx(next)
+            updateUrlWeek(next)
+          }}
+          onNext={() => {
+            const next = Math.min(totalWeeks - 1, weekIdx + 1)
+            setWeekIdx(next)
+            updateUrlWeek(next)
+          }}
+          canEmail={canEdit}
+          emailState={emailState}
+          onEmail={handleSaveScheduleAsImage}
+        />
+      )}
 
       {/* Weekly budget goals & LY — responsive cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-3">
@@ -1091,4 +1115,6 @@ export function ScheduleGrid({
       )}
     </div>
   )
-}
+})
+
+export const ScheduleGrid = ScheduleGridInner
