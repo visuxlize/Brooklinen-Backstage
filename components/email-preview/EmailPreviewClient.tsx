@@ -35,7 +35,7 @@ type SchedulePreviewData = {
 
 interface EmailPreviewClientProps {
   /** Stores the user is allowed to preview. OPS: all; Leader: only their assigned store. */
-  allowedStores: StoreConfig[]
+  allowedStores: readonly StoreConfig[]
   /** Initial store to select (user's store for leaders, or first for OPS). */
   initialStoreId: number
 }
