@@ -11,6 +11,7 @@ import { WeekNav } from './WeekNav'
 import { HoursSummary } from './HoursSummary'
 import { StatCard } from '@/components/ui/StatCard'
 import { Avatar } from '@/components/ui/Avatar'
+import { ScheduleImageTemplate } from './ScheduleImageTemplate'
 import { parsePaidHours, SHIFT_TYPES, shiftFitsInWindow, formatTime24to12 } from '@/lib/shiftUtils'
 import {
   getCellValue,
@@ -20,6 +21,9 @@ import {
   type RtoRequestForSchedule,
 } from '@/lib/scheduleRtoUtils'
 import { STORE_CONFIG, type StoreConfig } from '@/lib/stores'
+
+const IMAGE_WIDTH = 1920
+const IMAGE_HEIGHT = 1080
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
@@ -111,6 +115,26 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
   }, [initialDailyBudget, initialDailyLy])
   const [emailState, setEmailState] = useState<'idle' | 'loading' | 'sent'>('idle')
   const [employees, setEmployees] = useState<string[]>(initialEmployees)
+  type ImageCaptureSnapshot = {
+    store: StoreConfig
+    employees: string[]
+    initialData: GridData
+    weekStartDate: Date
+    dailyBudget: number[]
+    dailyLy: number[]
+    weeklyBudget: number
+    weeklyLy: number
+    workload: Record<string, string> | null
+    promotions: Record<string, string> | null
+    budgetHoursDaily: number[]
+    trendingHoursDaily: number[]
+    peakWindowByDay: string[]
+    allowableHours: number
+    initialApprovedRtoRequests: Array<{ id: string; employeeName: string; type: string; status: string; startDate: string | null; endDate: string | null; requestedDays: string | null }>
+  }
+  const [imageCaptureSnapshot, setImageCaptureSnapshot] = useState<ImageCaptureSnapshot | null>(null)
+  const captureContainerRef = useRef<HTMLDivElement>(null)
+  const captureResolveRef = useRef<((url: string | null) => void) | null>(null)
 
   // When store changes, reset to initial then fetch will repopulate with order + coverage
   useEffect(() => {
@@ -441,143 +465,135 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
     }
   }
 
-  async function captureScheduleAsImageDataUrl(): Promise<string | null> {
-    const container = gridRef.current
-    if (!container) return null
-    const table = container.querySelector<HTMLTableElement>('[data-schedule-table]')
-    const captureEl: HTMLElement = table ?? container
-    try {
-      const containerPrev = {
-        width: container.style.width,
-        minWidth: container.style.minWidth,
-        overflow: container.style.overflow,
-        overflowX: container.style.overflowX,
+  // When imageCaptureSnapshot is set, render hidden ScheduleImageTemplate then capture to 1920x1080 and resolve promise / trigger download
+  useEffect(() => {
+    if (!imageCaptureSnapshot) return
+    const snapshot = imageCaptureSnapshot
+    const timer = setTimeout(() => {
+      const wrapper = captureContainerRef.current
+      const templateEl = wrapper?.firstElementChild as HTMLElement | undefined
+      if (!templateEl) {
+        captureResolveRef.current?.(null)
+        captureResolveRef.current = null
+        setImageCaptureSnapshot(null)
+        return
       }
-      const initialWidth = Math.max(captureEl.scrollWidth, 920)
-      container.style.width = `${initialWidth}px`
-      container.style.minWidth = `${initialWidth}px`
-      container.style.overflow = 'visible'
-      container.style.overflowX = 'visible'
-
-      const scrollParents: { el: HTMLElement; overflow: string; overflowX: string; width: string }[] = []
-      let parent = container.parentElement
-      while (parent && parent !== document.body) {
-        const cs = window.getComputedStyle(parent)
-        if (
-          cs.overflow === 'auto' ||
-          cs.overflow === 'scroll' ||
-          cs.overflowX === 'auto' ||
-          cs.overflowX === 'scroll'
-        ) {
-          scrollParents.push({
-            el: parent as HTMLElement,
-            overflow: parent.style.overflow,
-            overflowX: parent.style.overflowX,
-            width: parent.style.width,
-          })
-          parent.style.overflow = 'visible'
-          parent.style.overflowX = 'visible'
-          parent.style.width = `${initialWidth}px`
-        }
-        parent = parent.parentElement
-      }
-
-      const saveBtn = container.querySelector('[data-save-btn]')
-      if (saveBtn) (saveBtn as HTMLElement).style.visibility = 'hidden'
-
-      /** Fix employee column: min-width so names don't clip; remove truncation from name spans */
-      const EMPLOYEE_COLUMN_MIN_WIDTH = 200
-      const firstColCells = captureEl.querySelectorAll<HTMLElement>('th:first-child, td:first-child')
-      const firstColRestore: { el: HTMLElement; minWidth: string }[] = []
-      firstColCells.forEach((cell) => {
-        firstColRestore.push({ el: cell, minWidth: cell.style.minWidth })
-        cell.style.minWidth = `${EMPLOYEE_COLUMN_MIN_WIDTH}px`
-      })
-      const nameSpans = captureEl.querySelectorAll<HTMLElement>('[data-employee-name-display]')
-      const nameSpanRestore: { el: HTMLElement; overflow: string; whiteSpace: string; textOverflow: string }[] = []
-      nameSpans.forEach((span) => {
-        nameSpanRestore.push({
-          el: span,
-          overflow: span.style.overflow,
-          whiteSpace: span.style.whiteSpace,
-          textOverflow: span.style.textOverflow,
-        })
-        span.style.overflow = 'visible'
-        span.style.whiteSpace = 'normal'
-        span.style.textOverflow = 'clip'
-      })
-
-      /** Ensure Workload row (and meta rows) are in capture and fully visible */
-      const workloadRow = captureEl.querySelector<HTMLElement>('[data-capture-workload]')
-      let workloadRestore: { el: HTMLElement; opacity: string; visibility: string } | null = null
-      if (workloadRow) {
-        workloadRestore = {
-          el: workloadRow,
-          opacity: workloadRow.style.opacity,
-          visibility: workloadRow.style.visibility,
-        }
-        workloadRow.style.opacity = '1'
-        workloadRow.style.visibility = 'visible'
-        workloadRow.querySelectorAll('td, th').forEach((cell) => {
-          const c = cell as HTMLElement
-          c.style.opacity = '1'
-          c.style.visibility = 'visible'
-        })
-      }
-
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
-      const fullWidth = captureEl.scrollWidth
-      const fullHeight = captureEl.scrollHeight
-
-      const canvas = await html2canvas(captureEl, {
+      html2canvas(templateEl, {
         scale: 2,
         useCORS: true,
         allowTaint: false,
         backgroundColor: '#ffffff',
-        scrollX: -window.scrollX,
-        scrollY: -window.scrollY,
-        windowWidth: fullWidth,
-        windowHeight: fullHeight,
+        windowWidth: IMAGE_WIDTH,
+        windowHeight: templateEl.scrollHeight,
         logging: false,
         imageTimeout: 0,
       } as Parameters<typeof html2canvas>[1])
-
-      firstColRestore.forEach(({ el, minWidth }) => { el.style.minWidth = minWidth })
-      nameSpanRestore.forEach(({ el, overflow, whiteSpace, textOverflow }) => {
-        el.style.overflow = overflow
-        el.style.whiteSpace = whiteSpace
-        el.style.textOverflow = textOverflow
-      })
-      if (workloadRestore) {
-        workloadRestore.el.style.opacity = workloadRestore.opacity
-        workloadRestore.el.style.visibility = workloadRestore.visibility
-        workloadRestore.el.querySelectorAll('td, th').forEach((cell) => {
-          const c = cell as HTMLElement
-          c.style.opacity = ''
-          c.style.visibility = ''
+        .then((canvas) => {
+          const cw = canvas.width
+          const ch = canvas.height
+          const scale = Math.min(IMAGE_WIDTH / cw, IMAGE_HEIGHT / ch)
+          const out = document.createElement('canvas')
+          out.width = IMAGE_WIDTH
+          out.height = IMAGE_HEIGHT
+          const ctx = out.getContext('2d')
+          if (!ctx) {
+            captureResolveRef.current?.(null)
+            return
+          }
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT)
+          const drawW = cw * scale
+          const drawH = ch * scale
+          const x = (IMAGE_WIDTH - drawW) / 2
+          const y = (IMAGE_HEIGHT - drawH) / 2
+          ctx.drawImage(canvas, 0, 0, cw, ch, x, y, drawW, drawH)
+          const dataUrl = out.toDataURL('image/png')
+          captureResolveRef.current?.(dataUrl)
+          captureResolveRef.current = null
+          setImageCaptureSnapshot(null)
         })
-      }
+        .catch(() => {
+          captureResolveRef.current?.(null)
+          captureResolveRef.current = null
+          setImageCaptureSnapshot(null)
+        })
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [imageCaptureSnapshot])
 
-      container.style.width = containerPrev.width
-      container.style.minWidth = containerPrev.minWidth
-      container.style.overflow = containerPrev.overflow
-      container.style.overflowX = containerPrev.overflowX
-      scrollParents.forEach((sp) => {
-        sp.el.style.overflow = sp.overflow
-        sp.el.style.overflowX = sp.overflowX
-        sp.el.style.width = sp.width
+  function captureScheduleAsImageDataUrl(): Promise<string | null> {
+    return new Promise((resolve) => {
+      captureResolveRef.current = resolve
+      setImageCaptureSnapshot({
+        store,
+        employees,
+        initialData: { ...gridData },
+        weekStartDate: weekStart,
+        dailyBudget: [...dailyBudget],
+        dailyLy: [...dailyLy],
+        weeklyBudget: weeklyBudget ?? 0,
+        weeklyLy: weeklyLy ?? 0,
+        workload: Object.keys(workload).length ? { ...workload } : null,
+        promotions: Object.keys(promotions).length ? { ...promotions } : null,
+        budgetHoursDaily: [...budgetHoursDaily],
+        trendingHoursDaily: [...trendingHoursDaily],
+        peakWindowByDay: [...peakWindowByDay],
+        allowableHours: allowableHours ?? 0,
+        initialApprovedRtoRequests: approvedRtoRequests.map((r) => ({
+          id: r.id,
+          employeeName: r.employeeName,
+          type: r.type,
+          status: r.status,
+          startDate: r.startDate,
+          endDate: r.endDate,
+          requestedDays: r.requestedDays ?? null,
+        })),
       })
-      if (saveBtn) (saveBtn as HTMLElement).style.visibility = ''
-
-      return canvas.toDataURL('image/png')
-    } catch {
-      return null
-    }
+    })
   }
 
   async function handleSaveScheduleAsImage() {
     setEmailState('loading')
-    const dataUrl = await captureScheduleAsImageDataUrl()
+    let dataUrl: string | null = null
+    try {
+      const res = await fetch(`/api/schedule/preview-data?storeId=${store.id}&weekIndex=${weekIdx}`, { credentials: 'include' })
+      if (res.ok) {
+        const data = await res.json()
+        const base = {
+          store: data.store,
+          employees: data.employees,
+          initialData: { ...gridData },
+          weekStartDate: new Date(data.weekStartDate),
+          dailyBudget: data.initialDailyBudget ?? [],
+          dailyLy: data.initialDailyLy ?? [],
+          weeklyBudget: data.initialWeeklyBudget ?? 0,
+          weeklyLy: data.initialWeeklyLy ?? 0,
+          workload: data.initialWeekMeta?.workload ?? null,
+          promotions: data.initialWeekMeta?.promotions ?? null,
+          budgetHoursDaily: data.budgetHoursDaily ?? [],
+          trendingHoursDaily: data.trendingHoursDaily ?? [],
+          peakWindowByDay: data.peakWindowByDay ?? ['—', '—', '—', '—', '—', '—', '—'],
+          allowableHours: data.allowableHours ?? 0,
+          initialApprovedRtoRequests: (data.initialApprovedRtoRequests ?? []).map((r: { id: string; employeeName: string; type: string; status: string; startDate: string | null; endDate: string | null; requestedDays: string | null }) => ({
+            id: r.id,
+            employeeName: r.employeeName,
+            type: r.type,
+            status: r.status,
+            startDate: r.startDate,
+            endDate: r.endDate,
+            requestedDays: r.requestedDays ?? null,
+          })),
+        }
+        dataUrl = await new Promise<string | null>((resolve) => {
+          captureResolveRef.current = resolve
+          setImageCaptureSnapshot(base)
+        })
+      } else {
+        dataUrl = await captureScheduleAsImageDataUrl()
+      }
+    } catch {
+      dataUrl = await captureScheduleAsImageDataUrl()
+    }
     if (dataUrl) {
       const weekEnd = addDays(weekStart, 6)
       const weekLabel = `${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d')}, ${format(weekStart, 'yyyy')}`
@@ -720,6 +736,34 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
 
   return (
     <div className="p-3 sm:p-4 flex flex-col min-h-[calc(100vh-3rem)] max-w-full relative">
+      {/* Hidden schedule image template for "Save as image (for email)" — captured at 1920x1080 */}
+      {imageCaptureSnapshot && (
+        <div
+          ref={captureContainerRef}
+          aria-hidden
+          className="fixed left-[-9999px] top-0 z-[-1]"
+          style={{ width: IMAGE_WIDTH }}
+        >
+          <ScheduleImageTemplate
+            width={IMAGE_WIDTH}
+            store={imageCaptureSnapshot.store}
+            employees={imageCaptureSnapshot.employees}
+            initialData={imageCaptureSnapshot.initialData}
+            weekStartDate={imageCaptureSnapshot.weekStartDate}
+            dailyBudget={imageCaptureSnapshot.dailyBudget}
+            dailyLy={imageCaptureSnapshot.dailyLy}
+            weeklyBudget={imageCaptureSnapshot.weeklyBudget}
+            weeklyLy={imageCaptureSnapshot.weeklyLy}
+            workload={imageCaptureSnapshot.workload}
+            promotions={imageCaptureSnapshot.promotions}
+            budgetHoursDaily={imageCaptureSnapshot.budgetHoursDaily}
+            trendingHoursDaily={imageCaptureSnapshot.trendingHoursDaily}
+            peakWindowByDay={imageCaptureSnapshot.peakWindowByDay}
+            allowableHours={imageCaptureSnapshot.allowableHours}
+            initialApprovedRtoRequests={imageCaptureSnapshot.initialApprovedRtoRequests}
+          />
+        </div>
+      )}
       {/* Delete schedule confirmation card */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowDeleteConfirm(false)}>
