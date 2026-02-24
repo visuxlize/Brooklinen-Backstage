@@ -1,9 +1,21 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+import { X } from 'lucide-react'
 import { useDailyOps } from '@/lib/daily-ops/DailyOpsContext'
 import { SHIFT_ROLES, SHIFT_ROLE_COLORS, type ShiftRole } from '@/lib/daily-ops/types'
 import { formatCurrency } from '@/lib/daily-ops/formatters'
+
+/** Quick Set context menu options: label, background hex, role key for storage. */
+const ZONING_QUICK_SET_OPTIONS: { label: string; color: string; role: ShiftRole }[] = [
+  { label: 'LOD', color: '#4CAF50', role: 'LOD' },
+  { label: 'Floor Support', color: '#388E3C', role: 'Floor Support' },
+  { label: 'Visual', color: '#B3E5FC', role: 'Visual' },
+  { label: 'Opening', color: '#FFF176', role: 'Opening' },
+  { label: 'Stockroom', color: '#E1BEE7', role: 'Stockroom' },
+  { label: 'Lunch / Meal Break', color: '#B0BEC5', role: 'Lunch' },
+]
 
 const SLOT_COUNT = 9
 /** 15-min blocks from 8:00 AM (index 0) to 9:00 PM (index 52). */
@@ -101,14 +113,12 @@ export function ZoningChart() {
     [employees, setEmployeeSlot]
   )
 
-  /** Right-click context menu: clear zone or change to another role */
+  /** Right-click context menu: one cell (employeeIndex, quarterIndex). Shown for every cell. */
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
     employeeIndex: number
-    startQ: number
-    endQ: number
-    currentRole: string
+    quarterIndex: number
   } | null>(null)
 
   const clearContextMenu = useCallback(() => setContextMenu(null), [])
@@ -123,6 +133,16 @@ export function ZoningChart() {
       window.removeEventListener('scroll', handle, true)
     }
   }, [contextMenu, clearContextMenu])
+
+  const applyQuickSet = useCallback(
+    (role: ShiftRole | '') => {
+      if (!contextMenu) return
+      const { employeeIndex, quarterIndex } = contextMenu
+      applyRoleToRange(employeeIndex, quarterIndex, quarterIndex, role)
+      clearContextMenu()
+    },
+    [contextMenu, applyRoleToRange, clearContextMenu]
+  )
 
   const handleCellClick = (employeeIndex: number, quarterIndex: number) => {
     if (!selectedRole) return
@@ -269,7 +289,7 @@ export function ZoningChart() {
                             title={role ? `${quarterIndexToTime(q)}: ${role}` : quarterIndexToTime(q)}
                             onContextMenu={(e) => {
                               e.preventDefault()
-                              if (role) setContextMenu({ x: e.clientX, y: e.clientY, employeeIndex: i, startQ: runStart, endQ: runEnd, currentRole: role })
+                              setContextMenu({ x: e.clientX, y: e.clientY, employeeIndex: i, quarterIndex: q })
                             }}
                             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }}
                             onDrop={(e) => {
@@ -370,41 +390,57 @@ export function ZoningChart() {
         </button>
       </div>
 
-      {/* Right-click context menu: clear zone or change to another role */}
-      {contextMenu && (
-        <div
-          className="fixed z-50 min-w-[160px] py-1 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              applyRoleToRange(contextMenu.employeeIndex, contextMenu.startQ, contextMenu.endQ, '')
-              clearContextMenu()
-            }}
-            className="w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700"
-          >
-            Clear zone
-          </button>
-          <div className="border-t border-slate-200 dark:border-slate-600 my-1" />
-          <p className="px-3 py-1 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400">Change to</p>
-          {SHIFT_ROLES.filter((r) => r !== contextMenu.currentRole).map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => {
-                applyRoleToRange(contextMenu.employeeIndex, contextMenu.startQ, contextMenu.endQ, r)
-                clearContextMenu()
-              }}
-              className="w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200"
+      {/* Right-click Quick Set context menu — portal, one menu at a time, outside click closes */}
+      {contextMenu &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={clearContextMenu}
+              aria-hidden
+            />
+            <div
+              className="fixed z-50 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-600 p-3 w-52"
+              style={{ left: contextMenu.x + 4, top: contextMenu.y + 4 }}
+              role="menu"
+              onClick={(e) => e.stopPropagation()}
             >
-              <span className="w-3 h-3 rounded flex-shrink-0 border border-slate-300" style={{ backgroundColor: SHIFT_ROLE_COLORS[r] }} />
-              {r}
-            </button>
-          ))}
-        </div>
-      )}
+              <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-400 mb-2 px-1 pointer-events-none">
+                Quick Set
+              </div>
+              <div className="flex flex-col gap-1">
+                {ZONING_QUICK_SET_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.role}
+                    type="button"
+                    onClick={() => applyQuickSet(opt.role)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200/60 dark:border-slate-600/60 text-left transition-colors hover:opacity-90"
+                    style={{
+                      backgroundColor: opt.color,
+                      color: getContrastTextColor(opt.color),
+                    }}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-black/15"
+                      style={{ backgroundColor: opt.color }}
+                    />
+                    {opt.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => applyQuickSet('')}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors mt-1"
+                >
+                  <X className="w-3.5 h-3.5 flex-shrink-0" />
+                  Clear
+                </button>
+              </div>
+            </div>
+          </>,
+          document.body
+        )}
     </div>
   )
 }

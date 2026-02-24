@@ -23,11 +23,32 @@ export function getPlusMinusColor(value: string | null): string {
   return value.startsWith('+') ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-600 dark:text-red-400 font-medium'
 }
 
-/** Returns Tailwind background class for editable running %: + → light green, - → light red, else default. */
-export function getRunningPercentInputBg(value: string): string {
-  const t = value.trim()
-  if (t.startsWith('+')) return 'bg-green-100 dark:bg-green-900/30 text-slate-900 dark:text-slate-100'
-  if (t.startsWith('-')) return 'bg-red-100 dark:bg-red-900/30 text-slate-900 dark:text-slate-100'
+/**
+ * Parses user input for Running % (WTD/MTD/QTD). Strips "%" and non-digits, clamps 0–999.
+ * Returns stored value: "" or "0".."999".
+ */
+export function parseRunningPercentInput(raw: string): string {
+  const digits = raw.replace(/%/g, '').replace(/\D/g, '')
+  if (digits === '') return ''
+  const n = Math.min(999, Math.max(0, parseInt(digits, 10) || 0))
+  return String(n)
+}
+
+/**
+ * Formats stored Running % value for display. Always shows "%" suffix; normalizes legacy "+4"/"04" to "4%".
+ */
+export function formatRunningPercentDisplay(stored: string): string {
+  const digits = stored.replace(/\D/g, '')
+  if (digits === '') return ''
+  const n = Math.min(999, Math.max(0, parseInt(digits, 10) || 0))
+  return `${n}%`
+}
+
+/** Returns Tailwind background class for editable running %: numeric > 0 → light green, else default. */
+export function getRunningPercentInputBg(stored: string): string {
+  const digits = stored.replace(/\D/g, '')
+  const n = digits === '' ? 0 : parseInt(digits, 10) || 0
+  if (n > 0) return 'bg-green-100 dark:bg-green-900/30 text-slate-900 dark:text-slate-100'
   return 'bg-blue-50 dark:bg-blue-900/20 text-slate-900 dark:text-slate-100'
 }
 

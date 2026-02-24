@@ -44,13 +44,13 @@ export const SHIFT_ROLES: ShiftRole[] = [
 ]
 
 export const SHIFT_ROLE_COLORS: Record<ShiftRole, string> = {
-  Opening: '#fce8b2',
-  LOD: '#b7e1cd',
-  'Floor Support': '#8bc34a',
-  Stockroom: '#e8e7fc',
-  Visual: '#e0f7fa',
+  LOD: '#4CAF50',
+  'Floor Support': '#388E3C',
+  Visual: '#B3E5FC',
+  Opening: '#FFF176',
+  Stockroom: '#E1BEE7',
+  Lunch: '#B0BEC5',
   Closing: '#f4c7c3',
-  Lunch: '#bdbdbd',
   'Office Time': '#eef7e3',
   Flex: '#c9daf8',
   Sick: '#a64d79',

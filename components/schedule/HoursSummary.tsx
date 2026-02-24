@@ -1,4 +1,4 @@
-import { parsePaidHours } from '@/lib/shiftUtils'
+import { parsePaidHours, formatHours } from '@/lib/shiftUtils'
 
 const DAY_KEYS = [0, 1, 2, 3, 4, 5, 6]
 
@@ -35,11 +35,11 @@ export function HoursSummary({
         <tr data-row="budget-hours" className="bg-slate-100 dark:bg-slate-700/60 border-b border-slate-200 dark:border-slate-600">
           <td className="px-5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Budget hours</td>
           <td className="px-3 py-2.5 text-center text-sm font-bold text-slate-800 dark:text-slate-100 w-16 tabular-nums">
-            {budgetWtd > 0 ? <>{budgetWtd}<span className="ml-0.5 opacity-90">h</span></> : '—'}
+            {budgetWtd > 0 ? formatHours(budgetWtd) : '—'}
           </td>
           {DAY_KEYS.map((day) => (
             <td key={day} className="px-2.5 py-2.5 text-center text-sm font-medium text-slate-800 dark:text-slate-100 tabular-nums">
-              {budgetHoursDaily[day] != null && budgetHoursDaily[day] > 0 ? <>{budgetHoursDaily[day]}<span className="ml-0.5 opacity-90">h</span></> : '—'}
+              {budgetHoursDaily[day] != null && budgetHoursDaily[day] > 0 ? formatHours(budgetHoursDaily[day]) : '—'}
             </td>
           ))}
         </tr>
@@ -48,11 +48,11 @@ export function HoursSummary({
         <tr data-row="trending-hours" className="bg-slate-50 dark:bg-slate-700/40 border-b border-slate-200 dark:border-slate-600">
           <td className="px-5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Trending hours</td>
           <td className="px-3 py-2.5 text-center text-sm font-bold text-slate-800 dark:text-slate-100 w-16 tabular-nums">
-            {trendingWtd > 0 ? <>{trendingWtd}<span className="ml-0.5 opacity-90">h</span></> : '—'}
+            {trendingWtd > 0 ? formatHours(trendingWtd) : '—'}
           </td>
           {DAY_KEYS.map((day) => (
             <td key={day} className="px-2.5 py-2.5 text-center text-sm font-medium text-slate-800 dark:text-slate-100 tabular-nums">
-              {trendingHoursDaily[day] != null && trendingHoursDaily[day] > 0 ? <>{trendingHoursDaily[day]}<span className="ml-0.5 opacity-90">h</span></> : '—'}
+              {trendingHoursDaily[day] != null && trendingHoursDaily[day] > 0 ? formatHours(trendingHoursDaily[day]) : '—'}
             </td>
           ))}
         </tr>

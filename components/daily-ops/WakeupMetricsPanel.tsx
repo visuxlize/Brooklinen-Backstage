@@ -1,7 +1,14 @@
 'use client'
 
 import { useDailyOps } from '@/lib/daily-ops/DailyOpsContext'
-import { formatCurrency, formatUpt, formatConversionGoal, getRunningPercentInputBg } from '@/lib/daily-ops/formatters'
+import {
+  formatCurrency,
+  formatUpt,
+  formatConversionGoal,
+  getRunningPercentInputBg,
+  parseRunningPercentInput,
+  formatRunningPercentDisplay,
+} from '@/lib/daily-ops/formatters'
 
 /**
  * KPI goals as clean cards: Budget, LY, Order Goal, AOV, UPT, Conversion, Running % WTD/MTD/QTD.
@@ -45,9 +52,11 @@ export function WakeupMetricsPanel() {
             <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">WTD</label>
             <input
               type="text"
+              inputMode="numeric"
               placeholder="--"
-              value={runningWtd}
-              onChange={(e) => setRunningWtd(e.target.value)}
+              value={formatRunningPercentDisplay(runningWtd)}
+              onChange={(e) => setRunningWtd(parseRunningPercentInput(e.target.value))}
+              onBlur={(e) => setRunningWtd(parseRunningPercentInput(e.target.value))}
               className={`w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 ${getRunningPercentInputBg(runningWtd)}`}
             />
           </div>
@@ -55,9 +64,11 @@ export function WakeupMetricsPanel() {
             <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">MTD</label>
             <input
               type="text"
+              inputMode="numeric"
               placeholder="--"
-              value={runningMtd}
-              onChange={(e) => setRunningMtd(e.target.value)}
+              value={formatRunningPercentDisplay(runningMtd)}
+              onChange={(e) => setRunningMtd(parseRunningPercentInput(e.target.value))}
+              onBlur={(e) => setRunningMtd(parseRunningPercentInput(e.target.value))}
               className={`w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 ${getRunningPercentInputBg(runningMtd)}`}
             />
           </div>
@@ -65,9 +76,11 @@ export function WakeupMetricsPanel() {
             <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">QTD</label>
             <input
               type="text"
+              inputMode="numeric"
               placeholder="--"
-              value={runningQtd}
-              onChange={(e) => setRunningQtd(e.target.value)}
+              value={formatRunningPercentDisplay(runningQtd)}
+              onChange={(e) => setRunningQtd(parseRunningPercentInput(e.target.value))}
+              onBlur={(e) => setRunningQtd(parseRunningPercentInput(e.target.value))}
               className={`w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 ${getRunningPercentInputBg(runningQtd)}`}
             />
           </div>

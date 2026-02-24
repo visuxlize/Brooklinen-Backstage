@@ -51,6 +51,25 @@ export function parseHours(val: string | null | undefined): number {
 }
 
 /**
+ * Rounds a raw hours value for display (budget/trending hours only):
+ * - .0, .1, .2 → round down to whole (e.g. 19.2 → 19)
+ * - .3, .4 → round to .5 (e.g. 23.4 → 23.5)
+ * - .5 → keep .5 (e.g. 23.5 → 23.5)
+ * - .6, .7, .8, .9 → round up to next whole (e.g. 19.8 → 20)
+ * Returns formatted string with " h" suffix, e.g. "23.5 h" or "33 h".
+ */
+export function formatHours(value: number): string {
+  const floor = Math.floor(value)
+  const frac = value - floor
+  let display: number
+  if (frac < 0.3) display = floor
+  else if (frac < 0.6) display = floor + 0.5
+  else display = Math.ceil(value)
+  const str = display === Math.floor(display) ? String(Math.round(display)) : String(display)
+  return `${str} h`
+}
+
+/**
  * Paid hours for a shift after applying lunch break deduction (labor-law rules).
  * Use this for "Actual hours" and budget comparisons. Example: 11AM–7PM → 8h gross → 7.5h paid.
  */

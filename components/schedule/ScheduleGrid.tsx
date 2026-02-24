@@ -442,20 +442,25 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
   }
 
   async function captureScheduleAsImageDataUrl(): Promise<string | null> {
-    const el = gridRef.current
-    if (!el) return null
+    const container = gridRef.current
+    if (!container) return null
+    const table = container.querySelector<HTMLTableElement>('[data-schedule-table]')
+    const captureEl: HTMLElement = table ?? container
     try {
-      const fullWidth = el.scrollWidth
-      const prevWidth = el.style.width
-      const prevOverflow = el.style.overflow
-      const prevMinWidth = el.style.minWidth
-
-      el.style.width = `${fullWidth}px`
-      el.style.minWidth = `${fullWidth}px`
-      el.style.overflow = 'visible'
+      const containerPrev = {
+        width: container.style.width,
+        minWidth: container.style.minWidth,
+        overflow: container.style.overflow,
+        overflowX: container.style.overflowX,
+      }
+      const initialWidth = Math.max(captureEl.scrollWidth, 920)
+      container.style.width = `${initialWidth}px`
+      container.style.minWidth = `${initialWidth}px`
+      container.style.overflow = 'visible'
+      container.style.overflowX = 'visible'
 
       const scrollParents: { el: HTMLElement; overflow: string; overflowX: string; width: string }[] = []
-      let parent = el.parentElement
+      let parent = container.parentElement
       while (parent && parent !== document.body) {
         const cs = window.getComputedStyle(parent)
         if (
@@ -472,17 +477,59 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
           })
           parent.style.overflow = 'visible'
           parent.style.overflowX = 'visible'
-          parent.style.width = `${fullWidth}px`
+          parent.style.width = `${initialWidth}px`
         }
         parent = parent.parentElement
       }
 
-      const saveBtn = el.querySelector('[data-save-btn]')
+      const saveBtn = container.querySelector('[data-save-btn]')
       if (saveBtn) (saveBtn as HTMLElement).style.visibility = 'hidden'
 
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      /** Fix employee column: min-width so names don't clip; remove truncation from name spans */
+      const EMPLOYEE_COLUMN_MIN_WIDTH = 200
+      const firstColCells = captureEl.querySelectorAll<HTMLElement>('th:first-child, td:first-child')
+      const firstColRestore: { el: HTMLElement; minWidth: string }[] = []
+      firstColCells.forEach((cell) => {
+        firstColRestore.push({ el: cell, minWidth: cell.style.minWidth })
+        cell.style.minWidth = `${EMPLOYEE_COLUMN_MIN_WIDTH}px`
+      })
+      const nameSpans = captureEl.querySelectorAll<HTMLElement>('[data-employee-name-display]')
+      const nameSpanRestore: { el: HTMLElement; overflow: string; whiteSpace: string; textOverflow: string }[] = []
+      nameSpans.forEach((span) => {
+        nameSpanRestore.push({
+          el: span,
+          overflow: span.style.overflow,
+          whiteSpace: span.style.whiteSpace,
+          textOverflow: span.style.textOverflow,
+        })
+        span.style.overflow = 'visible'
+        span.style.whiteSpace = 'normal'
+        span.style.textOverflow = 'clip'
+      })
 
-      const canvas = await html2canvas(el, {
+      /** Ensure Workload row (and meta rows) are in capture and fully visible */
+      const workloadRow = captureEl.querySelector<HTMLElement>('[data-capture-workload]')
+      let workloadRestore: { el: HTMLElement; opacity: string; visibility: string } | null = null
+      if (workloadRow) {
+        workloadRestore = {
+          el: workloadRow,
+          opacity: workloadRow.style.opacity,
+          visibility: workloadRow.style.visibility,
+        }
+        workloadRow.style.opacity = '1'
+        workloadRow.style.visibility = 'visible'
+        workloadRow.querySelectorAll('td, th').forEach((cell) => {
+          const c = cell as HTMLElement
+          c.style.opacity = '1'
+          c.style.visibility = 'visible'
+        })
+      }
+
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      const fullWidth = captureEl.scrollWidth
+      const fullHeight = captureEl.scrollHeight
+
+      const canvas = await html2canvas(captureEl, {
         scale: 2,
         useCORS: true,
         allowTaint: false,
@@ -490,14 +537,31 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
         scrollX: -window.scrollX,
         scrollY: -window.scrollY,
         windowWidth: fullWidth,
-        windowHeight: el.scrollHeight,
+        windowHeight: fullHeight,
         logging: false,
         imageTimeout: 0,
       } as Parameters<typeof html2canvas>[1])
 
-      el.style.width = prevWidth
-      el.style.minWidth = prevMinWidth
-      el.style.overflow = prevOverflow
+      firstColRestore.forEach(({ el, minWidth }) => { el.style.minWidth = minWidth })
+      nameSpanRestore.forEach(({ el, overflow, whiteSpace, textOverflow }) => {
+        el.style.overflow = overflow
+        el.style.whiteSpace = whiteSpace
+        el.style.textOverflow = textOverflow
+      })
+      if (workloadRestore) {
+        workloadRestore.el.style.opacity = workloadRestore.opacity
+        workloadRestore.el.style.visibility = workloadRestore.visibility
+        workloadRestore.el.querySelectorAll('td, th').forEach((cell) => {
+          const c = cell as HTMLElement
+          c.style.opacity = ''
+          c.style.visibility = ''
+        })
+      }
+
+      container.style.width = containerPrev.width
+      container.style.minWidth = containerPrev.minWidth
+      container.style.overflow = containerPrev.overflow
+      container.style.overflowX = containerPrev.overflowX
       scrollParents.forEach((sp) => {
         sp.el.style.overflow = sp.overflow
         sp.el.style.overflowX = sp.overflowX
@@ -899,7 +963,7 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                   </td>
                 ))}
               </tr>
-              <tr data-row="workload" className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 [&>td]:min-h-[3.25rem] [&>td]:overflow-visible">
+              <tr data-row="workload" data-capture-workload className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 [&>td]:min-h-[3.25rem] [&>td]:overflow-visible">
                 <td className="px-5 py-3 w-56 min-w-[11rem] text-xs font-semibold text-slate-600 dark:text-slate-300 align-middle">
                   Workload
                 </td>
@@ -959,7 +1023,7 @@ const ScheduleGridInner = forwardRef<ScheduleGridHandle, ScheduleGridProps>(func
                           <GripVertical className="w-4 h-4" />
                         </div>
                         <Avatar name={emp} size="sm" color={store.color} />
-                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate min-w-0">{emp}</span>
+                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate min-w-0" data-employee-name-display>{emp}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
