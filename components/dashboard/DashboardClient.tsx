@@ -13,7 +13,7 @@ import { CalendarWidget } from './CalendarWidget'
 import { PromotionsPanel } from './PromotionsPanel'
 import { QuickLinksPanel } from './QuickLinksPanel'
 
-const CARD_ICONS: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
+const CARD_ICONS: Record<string, React.ComponentType<Record<string, unknown>>> = {
   Calendar,
   Users,
   ClipboardList,
