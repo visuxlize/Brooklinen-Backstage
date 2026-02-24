@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useUserPreferencesStore, getInitials } from '@/lib/user-preferences-store'
+import { PromotionsSettingsCard } from './PromotionsSettingsCard'
 
 interface SettingsPanelProps {
   currentUser: {
@@ -13,9 +14,10 @@ interface SettingsPanelProps {
     storeName: string
     roleLabel: string
   }
+  canManagePromotions?: boolean
 }
 
-export function SettingsPanel({ currentUser }: SettingsPanelProps) {
+export function SettingsPanel({ currentUser, canManagePromotions = false }: SettingsPanelProps) {
   const { displayName, avatarUrl, updateUser } = useUserPreferencesStore()
   const [displayNameInput, setDisplayNameInput] = useState(displayName ?? currentUser.name)
   const [saved, setSaved] = useState(false)
@@ -244,6 +246,10 @@ export function SettingsPanel({ currentUser }: SettingsPanelProps) {
               </button>
             </div>
           </div>
+
+          {canManagePromotions && (
+            <PromotionsSettingsCard />
+          )}
         </div>
       </div>
     </div>

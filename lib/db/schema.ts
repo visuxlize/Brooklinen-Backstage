@@ -135,6 +135,25 @@ export const retailData = pgTable(
   })
 )
 
+/** Upcoming promotions (dashboard + admin). Admins add from settings; displayed on dashboard. */
+export const promotions = pgTable('promotions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  name: text('name').notNull(),
+  startDate: date('start_date').notNull(),
+  endDate: date('end_date').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+/** Google Calendar OAuth tokens per user (encrypted at rest recommended; store refresh + access). */
+export const userGoogleCalendarTokens = pgTable('user_google_calendar_tokens', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token'),
+  expiresAt: timestamp('expires_at').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
 /** Employee availability per store. scope=ongoing: effective from effectiveDate onward. scope=week: only that week (effectiveDate = Sunday). */
 export const availability = pgTable(
   'availability',
@@ -166,3 +185,5 @@ export type RtoRequest = typeof rtoRequests.$inferSelect
 export type RetailData = typeof retailData.$inferSelect
 export type Availability = typeof availability.$inferSelect
 export type ScheduleWeekMeta = typeof scheduleWeekMeta.$inferSelect
+export type Promotion = typeof promotions.$inferSelect
+export type UserGoogleCalendarToken = typeof userGoogleCalendarTokens.$inferSelect

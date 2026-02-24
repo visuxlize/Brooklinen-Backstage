@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { getStore, STORE_CONFIG } from '@/lib/stores'
-import { isFullControl } from '@/lib/roles'
+import { isFullControl, canAccessAdmin } from '@/lib/roles'
 import { ROLE_LABELS, normalizeRole } from '@/lib/roles'
 import { SettingsPanel } from '@/components/settings/SettingsPanel'
 
@@ -23,6 +23,7 @@ export default async function SettingsPage() {
         storeName,
         roleLabel: ROLE_LABELS[normalizeRole(user.role)] ?? user.role,
       }}
+      canManagePromotions={canAccessAdmin({ role: user.role, storeId: user.storeId })}
     />
   )
 }
