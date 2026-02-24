@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { getAppUrl } from '@/lib/app-config'
+import { getCalendarRedirectBaseUrl } from '@/lib/app-config'
 import { db } from '@/lib/db'
 import { userGoogleCalendarTokens } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
@@ -10,8 +10,9 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 /** GET: Exchange OAuth code for tokens and store them. */
 export async function GET(request: Request) {
   const user = await getCurrentUser()
+  const base = getCalendarRedirectBaseUrl()
   if (!user) {
-    return NextResponse.redirect(new URL('/login', getAppUrl()))
+    return NextResponse.redirect(new URL('/login', base))
   }
 
   const { searchParams } = new URL(request.url)
@@ -19,20 +20,20 @@ export async function GET(request: Request) {
   const error = searchParams.get('error')
 
   if (error) {
-    return NextResponse.redirect(new URL(`/dashboard?calendar=denied`, getAppUrl()))
+    return NextResponse.redirect(new URL('/dashboard?calendar=denied', base))
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL('/dashboard?calendar=error', getAppUrl()))
+    return NextResponse.redirect(new URL('/dashboard?calendar=error', base))
   }
 
   const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID
   const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL('/dashboard?calendar=not_configured', getAppUrl()))
+    return NextResponse.redirect(new URL('/dashboard?calendar=not_configured', base))
   }
 
-  const redirectUri = `${getAppUrl()}/api/calendar/callback`
+  const redirectUri = `${base}/api/calendar/callback`
   const body = new URLSearchParams({
     code,
     client_id: clientId,
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
   if (!tokenRes.ok) {
     const err = await tokenRes.text()
     console.error('Google token exchange failed:', err)
-    return NextResponse.redirect(new URL('/dashboard?calendar=error', getAppUrl()))
+    return NextResponse.redirect(new URL('/dashboard?calendar=error', base))
   }
 
   const data = await tokenRes.json()
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
   const expiresAt = new Date(Date.now() + expiresIn * 1000)
 
   if (!accessToken) {
-    return NextResponse.redirect(new URL('/dashboard?calendar=error', getAppUrl()))
+    return NextResponse.redirect(new URL('/dashboard?calendar=error', base))
   }
 
   try {
@@ -85,8 +86,8 @@ export async function GET(request: Request) {
       })
   } catch (e) {
     console.error('Failed to store Google Calendar tokens:', e)
-    return NextResponse.redirect(new URL('/dashboard?calendar=error', getAppUrl()))
+    return NextResponse.redirect(new URL('/dashboard?calendar=error', base))
   }
 
-  return NextResponse.redirect(new URL('/dashboard?calendar=connected', getAppUrl()))
+  return NextResponse.redirect(new URL('/dashboard?calendar=connected', base))
 }

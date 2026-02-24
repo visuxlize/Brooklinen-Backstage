@@ -191,7 +191,8 @@ The schedule grid and availability tab both use approved RTO/PTO when resolving 
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `DATABASE_URL` (PostgreSQL connection string from Supabase)
    - `NEXT_PUBLIC_APP_URL` (e.g. `http://localhost:3000`)
-   - Optional: `RESEND_API_KEY` for RTO approve/deny emails
+   - Optional: `RESEND_API_KEY` for RTO approve/deny emails  
+   - Optional: `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET` for dashboard Google Calendar (see [docs/GOOGLE_CALENDAR_SETUP.md](docs/GOOGLE_CALENDAR_SETUP.md))
 
 3. **Database**
    ```bash

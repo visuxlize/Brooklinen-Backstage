@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { getAppUrl } from '@/lib/app-config'
+import { getAppUrl, getCalendarRedirectBaseUrl } from '@/lib/app-config'
 
 /** GET: Redirect to Google OAuth2 consent for Calendar. */
 export async function GET() {
@@ -14,9 +14,9 @@ export async function GET() {
     return NextResponse.redirect(new URL('/dashboard?calendar=not_configured', getAppUrl()))
   }
 
-  const base = getAppUrl()
+  const base = getCalendarRedirectBaseUrl()
   const redirectUri = `${base}/api/calendar/callback`
-  const scope = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events.readonly'
+  const scope = 'https://www.googleapis.com/auth/calendar.readonly'
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,

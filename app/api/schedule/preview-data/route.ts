@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { schedules, users, retailData, stores, rtoRequests, scheduleWeekMeta } from '@/lib/db/schema'
-import { and, eq, gte, lte } from 'drizzle-orm'
+import { schedules, users, retailData, stores, rtoRequests, scheduleWeekMeta, trafficWeekly, storeTrafficPeak, hourlyTraffic } from '@/lib/db/schema'
+import { and, eq, gte, lte, desc } from 'drizzle-orm'
 import { ensureRtoRequestDates } from '@/lib/scheduleRtoUtils'
-import { getStore, STORE_CONFIG, type StoreConfig } from '@/lib/stores'
+import { getStore, type StoreConfig } from '@/lib/stores'
 import { isFullControl } from '@/lib/roles'
 import { format, addDays } from 'date-fns'
 import { getWeekStartByIndex, getTotalWeeks } from '@/lib/scheduleWeeks'
+import { getAllowableHours, getBudgetHoursDaily, getTrendingHoursDaily, findClosestLYWeek } from '@/lib/scheduleHours'
 
 export const dynamic = 'force-dynamic'
 
@@ -149,6 +150,70 @@ export async function GET(request: Request) {
   const promotions = metaRow?.promotions != null && typeof metaRow.promotions === 'object' ? (metaRow.promotions as Record<string, string>) : null
   const hoursOverride = metaRow?.hoursOverride != null && typeof metaRow.hoursOverride === 'object' ? (metaRow.hoursOverride as Record<string, string>) : null
 
+  const allowableHours = getAllowableHours(weeklyBudget)
+  const budgetHoursDaily = getBudgetHoursDaily(allowableHours)
+  const trafficWeeks = await db
+    .select()
+    .from(trafficWeekly)
+    .where(eq(trafficWeekly.storeId, storeId))
+    .orderBy(desc(trafficWeekly.weekStart))
+    .limit(53)
+  const latestTraffic = trafficWeeks[0]
+  const trendMult = latestTraffic?.trendMult != null ? Number(latestTraffic.trendMult) : 0
+  const trafficByWeek: Record<string, number[]> = {}
+  for (const w of trafficWeeks) {
+    const ws = typeof w.weekStart === 'string' ? w.weekStart : (w.weekStart as Date).toISOString().slice(0, 10)
+    trafficByWeek[ws] = [
+      Number(w.sun ?? 0),
+      Number(w.mon ?? 0),
+      Number(w.tue ?? 0),
+      Number(w.wed ?? 0),
+      Number(w.thu ?? 0),
+      Number(w.fri ?? 0),
+      Number(w.sat ?? 0),
+    ]
+  }
+  const availableWeeks = Object.keys(trafficByWeek).sort()
+  const lyWeekKey = findClosestLYWeek(weekStartStr, availableWeeks)
+  const lyTraffic = lyWeekKey ? trafficByWeek[lyWeekKey] : null
+  const trendingHoursDaily = getTrendingHoursDaily(
+    allowableHours,
+    lyTraffic ?? [0, 0, 0, 0, 0, 0, 0],
+    trendMult
+  )
+  let peakWindowByDay: string[] = ['—', '—', '—', '—', '—', '—', '—']
+  const [storedPeakRow] = await db
+    .select({ peakWindowByDay: storeTrafficPeak.peakWindowByDay })
+    .from(storeTrafficPeak)
+    .where(eq(storeTrafficPeak.storeId, storeId))
+    .limit(1)
+  const storedPeak = storedPeakRow?.peakWindowByDay
+  if (Array.isArray(storedPeak) && storedPeak.length === 7 && storedPeak.every((x) => typeof x === 'string')) {
+    peakWindowByDay = storedPeak as string[]
+  } else {
+    const hourlyRows = await db
+      .select({ hour: hourlyTraffic.hour, dayOfWeek: hourlyTraffic.dayOfWeek, avgCount: hourlyTraffic.avgCount })
+      .from(hourlyTraffic)
+      .where(eq(hourlyTraffic.storeId, storeId))
+    for (let dow = 0; dow < 7; dow++) {
+      const byHour = hourlyRows
+        .filter((r) => r.dayOfWeek === dow)
+        .map((r) => ({ hour: r.hour, avg: Number(r.avgCount ?? 0) }))
+        .sort((a, b) => b.avg - a.avg)
+      const top3 = byHour.slice(0, 3).map((x) => x.hour).sort((a, b) => a - b)
+      if (top3.length >= 2) {
+        const fmt = (h: number) => {
+          if (h === 0) return '12AM'
+          if (h < 12) return `${h}AM`
+          if (h === 12) return '12PM'
+          return `${h - 12}PM`
+        }
+        const endH = Math.min((top3[top3.length - 1] ?? 20) + 1, 20)
+        peakWindowByDay[dow] = `${fmt(top3[0])} – ${fmt(endH)}`
+      }
+    }
+  }
+
   return NextResponse.json({
     store: { id: store.id, name: store.name, city: store.city, color: store.color, hours: store.hours },
     employees,
@@ -163,5 +228,9 @@ export async function GET(request: Request) {
     initialWeeklyBudget: weeklyBudget || null,
     initialWeeklyLy: weeklyLy || null,
     initialWeekMeta: workload || promotions || hoursOverride ? { workload, promotions, hoursOverride } : null,
+    budgetHoursDaily,
+    trendingHoursDaily,
+    peakWindowByDay,
+    allowableHours,
   })
 }

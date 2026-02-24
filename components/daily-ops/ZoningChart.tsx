@@ -8,13 +8,13 @@ import { SHIFT_ROLES, SHIFT_ROLE_COLORS, type ShiftRole } from '@/lib/daily-ops/
 import { formatCurrency } from '@/lib/daily-ops/formatters'
 
 /** Quick Set context menu options: label, background hex, role key for storage. */
-const ZONING_QUICK_SET_OPTIONS: { label: string; color: string; role: ShiftRole }[] = [
-  { label: 'LOD', color: '#4CAF50', role: 'LOD' },
-  { label: 'Floor Support', color: '#388E3C', role: 'Floor Support' },
-  { label: 'Visual', color: '#B3E5FC', role: 'Visual' },
-  { label: 'Opening', color: '#FFF176', role: 'Opening' },
-  { label: 'Stockroom', color: '#E1BEE7', role: 'Stockroom' },
-  { label: 'Lunch / Meal Break', color: '#B0BEC5', role: 'Lunch' },
+const ZONING_QUICK_SET_OPTIONS: { label: string; role: ShiftRole }[] = [
+  { label: 'LOD', role: 'LOD' },
+  { label: 'Floor Support', role: 'Floor Support' },
+  { label: 'Visual', role: 'Visual' },
+  { label: 'Opening', role: 'Opening' },
+  { label: 'Stockroom', role: 'Stockroom' },
+  { label: 'Lunch / Meal Break', role: 'Lunch' },
 ]
 
 const SLOT_COUNT = 9
@@ -59,15 +59,8 @@ function quarterIndexToTime(q: number): string {
   return `${h}:${m === 0 ? '00' : m} AM`
 }
 
-/** Returns text color (black or white) for readable contrast on the given hex background. Works in light and dark mode. */
-function getContrastTextColor(hex: string): string {
-  if (!hex || hex.length < 7) return '#111827'
-  const r = parseInt(hex.slice(1, 3), 16) / 255
-  const g = parseInt(hex.slice(3, 5), 16) / 255
-  const b = parseInt(hex.slice(5, 7), 16) / 255
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-  return luminance > 0.5 ? '#111827' : '#f8fafc'
-}
+/** Dark text for zone blocks and legend — pastel backgrounds use this for legibility. */
+const ZONE_LABEL_TEXT_COLOR = '#1a1a1a'
 
 /**
  * Zoning chart: 8 AM–9 PM in 15-min blocks. Drag a role from the legend onto the grid, or select a role then click-and-drag over cells to fill a range.
@@ -324,7 +317,7 @@ export function ZoningChart() {
                                 className="flex items-center justify-center text-[10px] font-medium col-span-1"
                                 style={{
                                   gridColumn: `${run.start + 1} / span ${run.end - run.start + 1}`,
-                                  color: getContrastTextColor(SHIFT_ROLE_COLORS[run.role as ShiftRole] ?? '#e5e7eb'),
+                                  color: ZONE_LABEL_TEXT_COLOR,
                                 }}
                               >
                                 {run.role}
@@ -363,7 +356,7 @@ export function ZoningChart() {
                   ? 'ring-1 ring-blue-500 ring-offset-0 border-blue-400'
                   : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
               }`}
-              style={{ backgroundColor: SHIFT_ROLE_COLORS[r], color: getContrastTextColor(SHIFT_ROLE_COLORS[r]) }}
+              style={{ backgroundColor: SHIFT_ROLE_COLORS[r], color: ZONE_LABEL_TEXT_COLOR }}
             >
               <span className="w-2 h-2 rounded-full flex-shrink-0 border border-slate-400/50" style={{ backgroundColor: SHIFT_ROLE_COLORS[r] }} />
               <span className="flex-1 text-left min-w-0">{r}</span>
@@ -410,24 +403,27 @@ export function ZoningChart() {
                 Quick Set
               </div>
               <div className="flex flex-col gap-1">
-                {ZONING_QUICK_SET_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.role}
-                    type="button"
-                    onClick={() => applyQuickSet(opt.role)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200/60 dark:border-slate-600/60 text-left transition-colors hover:opacity-90"
-                    style={{
-                      backgroundColor: opt.color,
-                      color: getContrastTextColor(opt.color),
-                    }}
-                  >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-black/15"
-                      style={{ backgroundColor: opt.color }}
-                    />
-                    {opt.label}
-                  </button>
-                ))}
+                {ZONING_QUICK_SET_OPTIONS.map((opt) => {
+                  const bg = SHIFT_ROLE_COLORS[opt.role]
+                  return (
+                    <button
+                      key={opt.role}
+                      type="button"
+                      onClick={() => applyQuickSet(opt.role)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200/60 dark:border-slate-600/60 text-left transition-colors hover:opacity-90"
+                      style={{
+                        backgroundColor: bg,
+                        color: ZONE_LABEL_TEXT_COLOR,
+                      }}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-black/15"
+                        style={{ backgroundColor: bg }}
+                      />
+                      {opt.label}
+                    </button>
+                  )
+                })}
                 <button
                   type="button"
                   onClick={() => applyQuickSet('')}

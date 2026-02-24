@@ -35,21 +35,33 @@ export function parseRunningPercentInput(raw: string): string {
 }
 
 /**
- * Formats stored Running % value for display. Always shows "%" suffix; normalizes legacy "+4"/"04" to "4%".
+ * Formats stored Running % value for display. Adds +/- prefix from value vs 100:
+ * under 100 → "-93%"; exactly 100 → "100%"; over 100 → "+101%".
  */
 export function formatRunningPercentDisplay(stored: string): string {
   const digits = stored.replace(/\D/g, '')
   if (digits === '') return ''
   const n = Math.min(999, Math.max(0, parseInt(digits, 10) || 0))
-  return `${n}%`
+  if (n < 100) return `-${n}%`
+  if (n === 100) return '100%'
+  return `+${n}%`
 }
 
-/** Returns Tailwind background class for editable running %: numeric > 0 → light green, else default. */
-export function getRunningPercentInputBg(stored: string): string {
+/** Pastel background hex for Running % inputs: under 100 = rose, 100 = gray, over 100 = green. */
+export const RUNNING_PERCENT_BG = {
+  under: '#FFE4E4',
+  exact: '#F5F5F5',
+  over: '#E8F5E9',
+} as const
+
+/** Returns inline style for Running % input background and text (pastel, no saturated colors). */
+export function getRunningPercentInputStyle(stored: string): { backgroundColor: string; color: string } {
   const digits = stored.replace(/\D/g, '')
-  const n = digits === '' ? 0 : parseInt(digits, 10) || 0
-  if (n > 0) return 'bg-green-100 dark:bg-green-900/30 text-slate-900 dark:text-slate-100'
-  return 'bg-blue-50 dark:bg-blue-900/20 text-slate-900 dark:text-slate-100'
+  const n = digits === '' ? 100 : parseInt(digits, 10) || 100
+  const color = '#1a1a1a'
+  if (n < 100) return { backgroundColor: RUNNING_PERCENT_BG.under, color }
+  if (n === 100) return { backgroundColor: RUNNING_PERCENT_BG.exact, color }
+  return { backgroundColor: RUNNING_PERCENT_BG.over, color }
 }
 
 export function formatCurrency(value: number | null | undefined): string {

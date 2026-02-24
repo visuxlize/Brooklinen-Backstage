@@ -43,17 +43,18 @@ export const SHIFT_ROLES: ShiftRole[] = [
   'Sick',
 ]
 
+/** Pastel zone palette — soft tones for legend and grid blocks; use #1a1a1a for label text. */
 export const SHIFT_ROLE_COLORS: Record<ShiftRole, string> = {
-  LOD: '#4CAF50',
-  'Floor Support': '#388E3C',
-  Visual: '#B3E5FC',
-  Opening: '#FFF176',
+  Opening: '#FFF9C4',
+  LOD: '#C8E6C9',
+  'Floor Support': '#A5D6A7',
   Stockroom: '#E1BEE7',
-  Lunch: '#B0BEC5',
-  Closing: '#f4c7c3',
-  'Office Time': '#eef7e3',
-  Flex: '#c9daf8',
-  Sick: '#a64d79',
+  Visual: '#B3E5FC',
+  Closing: '#FFCCBC',
+  Lunch: '#CFD8DC',
+  'Office Time': '#F0F4C3',
+  Flex: '#B2EBF2',
+  Sick: '#F8BBD0',
 }
 
 export interface EmployeeSlot {

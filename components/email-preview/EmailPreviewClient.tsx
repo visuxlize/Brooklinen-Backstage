@@ -4,10 +4,14 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Mail, FileText, Loader2, AlertCircle, ChevronLeft, ChevronRight, Download, ImageIcon } from 'lucide-react'
 import { getWeekStartByIndex, getTotalWeeks, getWeekIndexForDate } from '@/lib/scheduleWeeks'
 import { format, addDays } from 'date-fns'
-import { ScheduleGrid, type ScheduleGridHandle } from '@/components/schedule/ScheduleGrid'
+import html2canvas from 'html2canvas'
+import { ScheduleImageTemplate } from '@/components/schedule/ScheduleImageTemplate'
 import type { StoreConfig } from '@/lib/stores'
 
 type TemplateType = 'schedule' | 'rto'
+
+const IMAGE_WIDTH = 1920
+const IMAGE_HEIGHT = 1080
 
 type SchedulePreviewData = {
   store: StoreConfig
@@ -31,6 +35,10 @@ type SchedulePreviewData = {
   initialWeeklyBudget: number | null
   initialWeeklyLy: number | null
   initialWeekMeta: { workload: Record<string, string> | null; promotions: Record<string, string> | null; hoursOverride: Record<string, string> | null } | null
+  budgetHoursDaily?: number[]
+  trendingHoursDaily?: number[]
+  peakWindowByDay?: string[]
+  allowableHours?: number
 }
 
 interface EmailPreviewClientProps {
@@ -49,7 +57,7 @@ export function EmailPreviewClient({ allowedStores, initialStoreId }: EmailPrevi
   const [scheduleDataError, setScheduleDataError] = useState<string | null>(null)
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null)
   const [generatingImage, setGeneratingImage] = useState(false)
-  const gridRef = useRef<ScheduleGridHandle>(null)
+  const captureContainerRef = useRef<HTMLDivElement>(null)
 
   const [rtoStatus, setRtoStatus] = useState<'approved' | 'denied'>('approved')
   const [html, setHtml] = useState<string>('')
@@ -132,16 +140,48 @@ export function EmailPreviewClient({ allowedStores, initialStoreId }: EmailPrevi
   }, [template, rtoPreviewUrl])
 
   const handleGenerateImage = useCallback(async () => {
-    if (!gridRef.current) return
+    const container = captureContainerRef.current
+    if (!container || !scheduleData) return
+    const templateEl = container.firstElementChild as HTMLElement
+    if (!templateEl) return
     setGeneratingImage(true)
     setGeneratedImageUrl(null)
     try {
-      const dataUrl = await gridRef.current.captureAsImage()
-      setGeneratedImageUrl(dataUrl ?? null)
+      const canvas = await html2canvas(templateEl, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        windowWidth: IMAGE_WIDTH,
+        windowHeight: templateEl.scrollHeight,
+        logging: false,
+        imageTimeout: 0,
+      } as Parameters<typeof html2canvas>[1])
+
+      const cw = canvas.width
+      const ch = canvas.height
+      const scale = Math.min(IMAGE_WIDTH / cw, IMAGE_HEIGHT / ch)
+      const out = document.createElement('canvas')
+      out.width = IMAGE_WIDTH
+      out.height = IMAGE_HEIGHT
+      const ctx = out.getContext('2d')
+      if (!ctx) {
+        setGeneratingImage(false)
+        return
+      }
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT)
+      const drawW = cw * scale
+      const drawH = ch * scale
+      const x = (IMAGE_WIDTH - drawW) / 2
+      const y = (IMAGE_HEIGHT - drawH) / 2
+      ctx.drawImage(canvas, 0, 0, cw, ch, x, y, drawW, drawH)
+      const dataUrl = out.toDataURL('image/png')
+      setGeneratedImageUrl(dataUrl)
     } finally {
       setGeneratingImage(false)
     }
-  }, [])
+  }, [scheduleData])
 
   const handleDownloadImage = useCallback(() => {
     if (!generatedImageUrl || !scheduleData) return
@@ -302,6 +342,32 @@ export function EmailPreviewClient({ allowedStores, initialStoreId }: EmailPrevi
               )}
               {scheduleData && !scheduleDataLoading && (
                 <div className="flex flex-col flex-1 min-h-0 p-2">
+                  {/* Hidden template for html2canvas capture (off-screen, fixed 1920px width) */}
+                  <div
+                    ref={captureContainerRef}
+                    aria-hidden
+                    className="fixed left-[-9999px] top-0 z-[-1]"
+                    style={{ width: IMAGE_WIDTH }}
+                  >
+                    <ScheduleImageTemplate
+                      width={IMAGE_WIDTH}
+                      store={scheduleData.store}
+                      employees={scheduleData.employees}
+                      initialData={scheduleData.initialData}
+                      weekStartDate={new Date(scheduleData.weekStartDate)}
+                      dailyBudget={scheduleData.initialDailyBudget}
+                      dailyLy={scheduleData.initialDailyLy}
+                      weeklyBudget={scheduleData.initialWeeklyBudget ?? 0}
+                      weeklyLy={scheduleData.initialWeeklyLy ?? 0}
+                      workload={scheduleData.initialWeekMeta?.workload ?? null}
+                      promotions={scheduleData.initialWeekMeta?.promotions ?? null}
+                      budgetHoursDaily={scheduleData.budgetHoursDaily ?? []}
+                      trendingHoursDaily={scheduleData.trendingHoursDaily ?? []}
+                      peakWindowByDay={scheduleData.peakWindowByDay ?? ['—', '—', '—', '—', '—', '—', '—']}
+                      allowableHours={scheduleData.allowableHours ?? 0}
+                      initialApprovedRtoRequests={scheduleData.initialApprovedRtoRequests}
+                    />
+                  </div>
                   {generatedImageUrl ? (
                     <div className="flex flex-col items-center gap-3">
                       <img
@@ -318,27 +384,27 @@ export function EmailPreviewClient({ allowedStores, initialStoreId }: EmailPrevi
                       <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
                         Schedule for {scheduleData.store.name} — {weekLabel}. Click &quot;Generate image&quot; to create the image.
                       </p>
-                      <div className="flex-1 min-h-[280px] overflow-auto border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800">
-                        <ScheduleGrid
-                          ref={gridRef}
-                          store={scheduleData.store}
-                          canEdit={false}
-                          employees={scheduleData.employees}
-                          initialData={scheduleData.initialData}
-                          weekStartDate={new Date(scheduleData.weekStartDate)}
-                          initialWeekIdx={scheduleData.initialWeekIdx}
-                          totalWeeks={scheduleData.totalWeeks}
-                          currentUser={{ role: 'leader', name: 'Preview' }}
-                          initialWeeklyBudget={scheduleData.initialWeeklyBudget}
-                          initialWeeklyLy={scheduleData.initialWeeklyLy}
-                          initialDailyBudget={scheduleData.initialDailyBudget}
-                          initialDailyLy={scheduleData.initialDailyLy}
-                          initialApprovedRtoRequests={scheduleData.initialApprovedRtoRequests
-                            .filter((r): r is typeof r & { startDate: string; endDate: string } => r.startDate != null && r.endDate != null)
-                            .map((r) => ({ ...r, requestedDays: r.requestedDays ?? undefined }))}
-                          initialWeekMeta={scheduleData.initialWeekMeta ?? undefined}
-                          previewMode
-                        />
+                      <div className="flex-1 min-h-[280px] overflow-auto border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 flex items-start justify-center p-2">
+                        <div style={{ transform: 'scale(0.35)', transformOrigin: 'top left' }}>
+                          <ScheduleImageTemplate
+                            width={IMAGE_WIDTH}
+                            store={scheduleData.store}
+                            employees={scheduleData.employees}
+                            initialData={scheduleData.initialData}
+                            weekStartDate={new Date(scheduleData.weekStartDate)}
+                            dailyBudget={scheduleData.initialDailyBudget}
+                            dailyLy={scheduleData.initialDailyLy}
+                            weeklyBudget={scheduleData.initialWeeklyBudget ?? 0}
+                            weeklyLy={scheduleData.initialWeeklyLy ?? 0}
+                            workload={scheduleData.initialWeekMeta?.workload ?? null}
+                            promotions={scheduleData.initialWeekMeta?.promotions ?? null}
+                            budgetHoursDaily={scheduleData.budgetHoursDaily ?? []}
+                            trendingHoursDaily={scheduleData.trendingHoursDaily ?? []}
+                            peakWindowByDay={scheduleData.peakWindowByDay ?? ['—', '—', '—', '—', '—', '—', '—']}
+                            allowableHours={scheduleData.allowableHours ?? 0}
+                            initialApprovedRtoRequests={scheduleData.initialApprovedRtoRequests}
+                          />
+                        </div>
                       </div>
                     </>
                   )}

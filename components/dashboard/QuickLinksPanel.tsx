@@ -11,47 +11,13 @@ import {
   Trash2,
   Link as LinkIcon,
 } from 'lucide-react'
-
-function FaviconOrFallback({ url }: { url: string }) {
-  const [failed, setFailed] = useState(false)
-  const src = getFaviconUrl(url)
-  if (failed || !src) {
-    return (
-      <span className="w-5 h-5 rounded bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
-        <LinkIcon className="w-3 h-3 text-slate-500" />
-      </span>
-    )
-  }
-  return (
-    <img
-      src={src}
-      alt=""
-      className="w-5 h-5 rounded object-contain"
-      onError={() => setFailed(true)}
-    />
-  )
-}
 import {
   useUserPreferencesStore,
   DEFAULT_QUICK_LINKS,
   type QuickLinkItem,
 } from '@/lib/user-preferences-store'
 
-const KNOWN_ICONS: Record<string, string> = {
-  lightspeed: '🟢',
-  slack: '💬',
-  gdrive: '📁',
-  workday: '👤',
-}
-
-function getFaviconUrl(url: string): string {
-  try {
-    const host = new URL(url).hostname
-    return `https://www.google.com/s2/favicons?domain=${host}&sz=32`
-  } catch {
-    return ''
-  }
-}
+const LINK_ICON_COLOR = '#6B7280'
 
 interface QuickLinksPanelProps {
   canEdit: boolean
@@ -152,6 +118,9 @@ export function QuickLinksPanel({ canEdit }: QuickLinksPanelProps) {
         <ul className="space-y-1">
           {displayLinks.map((link, index) => (
             <li key={link.id} className="flex items-center gap-2 group">
+              <span className="shrink-0 w-6 h-6 flex items-center justify-center" style={{ color: LINK_ICON_COLOR }} aria-hidden>
+                <LinkIcon className="w-4 h-4" />
+              </span>
               {editing && (
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button
@@ -201,13 +170,6 @@ export function QuickLinksPanel({ canEdit }: QuickLinksPanelProps) {
                 </div>
               ) : (
                 <>
-                  <span className="shrink-0 w-6 h-6 flex items-center justify-center text-sm">
-                    {link.icon && KNOWN_ICONS[link.icon] ? (
-                      KNOWN_ICONS[link.icon]
-                    ) : (
-                      <FaviconOrFallback url={link.url} />
-                    )}
-                  </span>
                   <a
                     href={link.url}
                     target="_blank"

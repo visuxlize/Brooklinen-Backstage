@@ -5,7 +5,7 @@ import {
   formatCurrency,
   formatUpt,
   formatConversionGoal,
-  getRunningPercentInputBg,
+  getRunningPercentInputStyle,
   parseRunningPercentInput,
   formatRunningPercentDisplay,
 } from '@/lib/daily-ops/formatters'
@@ -57,7 +57,8 @@ export function WakeupMetricsPanel() {
               value={formatRunningPercentDisplay(runningWtd)}
               onChange={(e) => setRunningWtd(parseRunningPercentInput(e.target.value))}
               onBlur={(e) => setRunningWtd(parseRunningPercentInput(e.target.value))}
-              className={`w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 ${getRunningPercentInputBg(runningWtd)}`}
+              className="w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600"
+              style={getRunningPercentInputStyle(runningWtd)}
             />
           </div>
           <div>
@@ -69,7 +70,8 @@ export function WakeupMetricsPanel() {
               value={formatRunningPercentDisplay(runningMtd)}
               onChange={(e) => setRunningMtd(parseRunningPercentInput(e.target.value))}
               onBlur={(e) => setRunningMtd(parseRunningPercentInput(e.target.value))}
-              className={`w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 ${getRunningPercentInputBg(runningMtd)}`}
+              className="w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600"
+              style={getRunningPercentInputStyle(runningMtd)}
             />
           </div>
           <div>
@@ -81,7 +83,8 @@ export function WakeupMetricsPanel() {
               value={formatRunningPercentDisplay(runningQtd)}
               onChange={(e) => setRunningQtd(parseRunningPercentInput(e.target.value))}
               onBlur={(e) => setRunningQtd(parseRunningPercentInput(e.target.value))}
-              className={`w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 ${getRunningPercentInputBg(runningQtd)}`}
+              className="w-full text-sm font-medium text-right px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600"
+              style={getRunningPercentInputStyle(runningQtd)}
             />
           </div>
         </div>
