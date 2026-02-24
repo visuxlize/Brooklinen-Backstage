@@ -4,9 +4,10 @@ import { db } from '@/lib/db'
 import { rtoRequests } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
-import { normalizeRole, isStoreLeader } from '@/lib/roles'
+import { normalizeRole, isStoreLeader, isFullControl } from '@/lib/roles'
 import { applyRtoApprovalToAvailabilityAndSchedule, revertRtoFromSchedule } from '@/lib/rtoAvailabilitySync'
-import { getAppUrl } from '@/lib/app-config'
+import { getStore } from '@/lib/stores'
+import { sendRTODecisionEmail } from '@/lib/rto-email'
 
 const patchSchema = z.object({
   status: z.enum(['approved', 'denied', 'pending']),
@@ -84,29 +85,42 @@ export async function PATCH(
       }
     }
 
-    // Send email notification if approved/denied
+    let emailWarning: string | undefined
     if (status !== 'pending') {
       try {
-        await fetch(`${getAppUrl()}/api/rto/email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            requestId: id,
-            employeeName: existing.employeeName,
-            employeeEmail: existing.employeeEmail,
-            type: existing.type,
-            requestedDays: existing.requestedDays,
-            status,
-            leaderNote,
-            storeId: existing.storeId,
-          }),
-        })
+        const store = getStore(existing.storeId)
+        const storeName = store?.name ?? 'Store'
+        const leader = { email: user.email ?? '', name: user.name ?? 'Store Leader' }
+        const requestPayload = {
+          id: existing.id,
+          employeeName: existing.employeeName,
+          employeeEmail: existing.employeeEmail,
+          storeId: existing.storeId,
+          storeName,
+          requestType: existing.type,
+          requestedDays: existing.requestedDays,
+          leaderNote: existing.leaderNote ?? null,
+          status: status as 'approved' | 'denied',
+        }
+        const { success } = await sendRTODecisionEmail(
+          requestPayload,
+          leader,
+          status as 'approved' | 'denied',
+          leaderNote ?? undefined
+        )
+        if (!success && leader.email) {
+          emailWarning = 'Email delivery failed'
+          console.warn(`[RTO] Decision email failed for request ${id}`)
+        }
       } catch (e) {
-        console.error('Failed to send RTO email:', e)
+        console.error('Failed to send RTO decision email (non-blocking):', e)
+        emailWarning = 'Email delivery failed'
       }
     }
 
-    return NextResponse.json({ data: updated })
+    return NextResponse.json(
+      emailWarning ? { data: updated, success: true, emailWarning } : { data: updated }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid input', details: error.errors }, { status: 400 })

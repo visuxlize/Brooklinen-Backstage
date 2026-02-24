@@ -42,6 +42,15 @@ Do these steps **before** running the app with Calendar features.
 
 ---
 
+## RTO Email Notifications (optional)
+
+For RTO submission and approval/denial emails via Resend:
+
+- `RESEND_API_KEY` — from [resend.com](https://resend.com) (required to send).
+- `EMAIL_FROM` or `NOTIFICATIONS_EMAIL_FROM` — e.g. `Brooklinen Backstage <notifications@brooklinen-backstage.vercel.app>`. Reply-To is always set to the sender (employee for submission, leader for decision).
+
+---
+
 ## Step 2 — Environment Variables
 
 This is a **Next.js** app (not Vite). Use `.env.local` in the project root.

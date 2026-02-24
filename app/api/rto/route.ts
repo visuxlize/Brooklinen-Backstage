@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { rtoRequests } from '@/lib/db/schema'
-import { eq, and, desc } from 'drizzle-orm'
+import { rtoRequests, users } from '@/lib/db/schema'
+import { eq, and, desc, inArray } from 'drizzle-orm'
 import { getCurrentUser } from '@/lib/auth'
 import { normalizeRole, isFullControl } from '@/lib/roles'
+import { getStore } from '@/lib/stores'
+import { sendRTOSubmissionNotification } from '@/lib/rto-email'
 
 const postSchema = z.object({
   storeId: z.number().int(),
@@ -88,6 +90,42 @@ export async function POST(request: Request) {
         status: 'pending',
       })
       .returning()
+
+    if (inserted) {
+      try {
+        const store = getStore(validated.storeId)
+        const storeName = store?.name ?? 'Store'
+        const leaderRows = await db
+          .select({ email: users.email, name: users.name })
+          .from(users)
+          .where(
+            and(
+              eq(users.storeId, validated.storeId),
+              inArray(users.role, ['leader', 'store_leader'])
+            )
+          )
+        const leaders = leaderRows
+          .filter((r) => r.email?.trim())
+          .map((r) => ({ email: r.email!, name: r.name ?? 'Store Leader' }))
+        const { sent, failed } = await sendRTOSubmissionNotification(
+          {
+            employeeName: validated.employeeName,
+            employeeEmail: validated.employeeEmail,
+            storeId: validated.storeId,
+            storeName,
+            requestType: validated.type,
+            requestedDays: requestedDaysDisplay,
+            note: validated.note ?? null,
+          },
+          leaders
+        )
+        if (failed > 0) {
+          console.warn(`[RTO] Submission notifications: ${sent} sent, ${failed} failed`)
+        }
+      } catch (e) {
+        console.error('[RTO] Leader notification email error (non-blocking):', e)
+      }
+    }
 
     return NextResponse.json({ data: inserted }, { status: 201 })
   } catch (error) {
