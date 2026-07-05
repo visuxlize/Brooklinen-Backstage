@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backstage — Schedule</title>
   <link rel="stylesheet" href="style.css">
+  <script>
+    (function(){try{var t=localStorage.getItem('backstage_theme');if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}})();
+  </script>
 </head>
 <body>
 
@@ -13,68 +16,162 @@
 <script src="data.js"></script>
 <script src="nav.js"></script>
 <script>
-  const content = renderShell({
-    page: 'schedule',
-    title: 'Schedule',
-    subtitle: `Week of ${SCHEDULE_DATA.weekOf} &nbsp;&middot;&nbsp; ${SCHEDULE_DATA.store}`,
-  })
-
+  const content = renderShell({ page: 'schedule', title: 'Schedule' })
   const s = SCHEDULE_DATA
+  const storeColor = STORES[0].color
 
-  /**
-   * Shift cell renderer.
-   * Returns styled HTML for a given shift string.
-   * "OFF" gets muted treatment, regular shifts get the green badge,
-   * "PTO" gets the gold treatment to match badge-pto class.
-   */
-  function shiftCell(value) {
-    if (!value || value === 'OFF') {
-      return `<span class="shift-off">OFF</span>`
-    }
-    if (value === 'PTO') {
-      return `<span class="shift-cell" style="background:rgba(196,162,74,0.15);color:#9A7820">PTO</span>`
-    }
-    return `<span class="shift-cell shift-work">${value}</span>`
-  }
-
-  function powerCell(value) {
-    return `<span class="shift-cell shift-power">${value}</span>`
-  }
-
-  // Employee initials for avatar
   function initials(name) {
     return name.split(' ').map(w => w[0]).join('').toUpperCase()
   }
 
-  // Hours summary per employee (rough: count shifts that aren't OFF)
-  const days = s.days
-  const dayHeaders = days.map(d => `<th>${d}</th>`).join('')
+  function shiftPill(value) {
+    if (!value || value === 'OFF') return `<span class="shift-pill shift-empty">&mdash;</span>`
+    if (value === 'PTO') return `<span class="shift-pill shift-pto">PTO</span>`
+    return `<span class="shift-pill shift-work">${value}</span>`
+  }
 
-  const employeeRows = s.employees.map(emp => {
-    const cells = emp.shifts.map(shift => `<td>${shiftCell(shift)}</td>`).join('')
-    return `
-      <tr>
-        <td>
-          <div class="flex items-center gap-8">
-            <div style="
-              width:28px;height:28px;border-radius:50%;
-              background:var(--charcoal);color:white;
-              display:flex;align-items:center;justify-content:center;
-              font-size:9px;font-weight:700;flex-shrink:0;
-            ">${initials(emp.name)}</div>
-            <div>
-              <div style="font-size:12px;font-weight:600;color:var(--charcoal)">${emp.name}</div>
-              <div class="emp-role-chip">${emp.role}</div>
-            </div>
-          </div>
-        </td>
-        <td style="font-weight:600;color:var(--charcoal);text-align:center">${emp.wtd}</td>
-        ${cells}
-      </tr>
-    `
+  const budgetWeekly = s.budgetByDay.reduce((a, b) => a + b, 0)
+  const lyWeekly = s.lyByDay.reduce((a, b) => a + b, 0)
+  const avgPerPerson = Math.round((s.trendingHours / s.employees.length) * 10) / 10
+  const actualTotal = s.actualByDay.reduce((a, b) => a + b, 0)
+  const isOverBudget = actualTotal > s.budgetHours + 10
+
+  // ── Week nav ──
+  const weekDotsHTML = Array.from({ length: s.totalWeeks }).map((_, i) =>
+    `<div class="week-dot ${i === s.weekIdx ? 'active' : ''}"></div>`
+  ).join('')
+
+  const weekNavHTML = `
+    <div class="week-nav">
+      <div class="week-nav-center">
+        <button class="week-nav-btn" onclick="showcaseToast('Not included in this showcase')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div>
+          <div class="week-range">${s.weekOf}</div>
+          <div class="week-range-sub">Week ${s.weekIdx + 1} of ${s.totalWeeks} (Sun&ndash;Sat)</div>
+        </div>
+        <button class="week-nav-btn" onclick="showcaseToast('Not included in this showcase')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div class="week-dots">${weekDotsHTML}</div>
+      <button class="btn btn-primary btn-md" onclick="showcaseToast('Not included in this showcase')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Save as image (for email)
+      </button>
+    </div>
+  `
+
+  // ── Stat cards ──
+  const statCardsHTML = `
+    <div class="grid-4 mb-24">
+      <div class="stat-card stat-card-accent" style="border-left-color:${storeColor}">
+        <span class="stat-label">Weekly Budget Goal</span>
+        <span class="stat-value">$${budgetWeekly.toLocaleString()}</span>
+        <span class="stat-sub">This week target</span>
+      </div>
+      <div class="stat-card stat-card-accent" style="border-left-color:${storeColor}">
+        <span class="stat-label">Weekly LY Budget</span>
+        <span class="stat-value">$${lyWeekly.toLocaleString()}</span>
+        <span class="stat-sub">Same week last year</span>
+      </div>
+      <div class="stat-card stat-card-accent" style="border-left-color:${storeColor}">
+        <span class="stat-label">Week Total Hours</span>
+        <span class="stat-value">${s.trendingHours}h</span>
+        <span class="stat-sub">-${s.budgetHours - s.trendingHours} vs budget</span>
+      </div>
+      <div class="stat-card stat-card-accent" style="border-left-color:${storeColor}">
+        <span class="stat-label">Staff on Rota</span>
+        <span class="stat-value">${s.employees.length}</span>
+        <span class="stat-sub">Active this week</span>
+      </div>
+    </div>
+    <div class="grid-4 mb-24" style="margin-top:-8px">
+      <div class="stat-card stat-card-accent" style="border-left-color:${storeColor}">
+        <span class="stat-label">Avg Per Person</span>
+        <span class="stat-value">${avgPerPerson}h</span>
+        <span class="stat-sub">Trending hours / staff</span>
+      </div>
+    </div>
+  `
+
+  // ── Legend ──
+  const legendHTML = `
+    <div class="legend-row">
+      <div class="legend-item"><span class="shift-pill shift-work" style="min-width:auto">10AM&ndash;6PM</span> Work shift</div>
+      <div class="legend-item"><span class="chip chip-blue chip-sm">PTO</span> Paid time off</div>
+      <div class="legend-item"><span class="chip chip-violet chip-sm">COMP</span> Comp day</div>
+      <div class="legend-item"><span class="chip chip-amber chip-sm">Sick</span> Sick day</div>
+      <div class="legend-item"><span class="shift-pill shift-empty" style="min-width:auto">&mdash;</span> Day off</div>
+    </div>
+  `
+
+  // ── Table header ──
+  const dayHeaders = s.days.map((d, i) => {
+    const [name] = d.split(' ')
+    return `<th>${name}<span class="th-daynum">7/${s.dayNums[i]}</span></th>`
   }).join('')
 
-  const powerRow = s.powerHour.map(p => `<td>${powerCell(p)}</td>`).join('')
+  // ── Meta rows ──
+  const budgetRow = `
+    <tr class="meta-row meta-row-budget">
+      <td>Budget Goal</td><td></td>
+      ${s.budgetByDay.map(v => `<td>$${v}</td>`).join('')}
+    </tr>
+  `
+  const lyRow = `
+    <tr class="meta-row meta-row-ly">
+      <td>LY Net</td><td></td>
+      ${s.lyByDay.map(v => `<td>$${v}</td>`).join('')}
+    </tr>
+  `
+  const powerRow = `
+    <tr class="meta-row meta-row-power">
+      <td>
+        <span class="power-hour-label">
+          <span class="power-hour-icon">&#9889;</span> Power Hour
+        </span>
+        <span class="power-hour-sub">Busiest window each day</span>
+      </td>
+      <td></td>
+      ${s.powerHour.map(p => `<td>${p}</td>`).join('')}
+    </tr>
+  `
+
+  // ── Employee rows ──
+  const employeeRows = s.employees.map(emp => `
+    <tr>
+      <td>
+        <div class="emp-cell">
+          <div class="avatar avatar-sm" style="background:${storeColor}">${initials(emp.name)}</div>
+          <div>
+            <div class="emp-name">${emp.name}</div>
+            <div class="emp-role">${emp.role}</div>
+          </div>
+        </div>
+      </td>
+      <td class="wtd-cell">${emp.wtd}</td>
+      ${emp.shifts.map(sh => `<td>${shiftPill(sh)}</td>`).join('')}
+    </tr>
+  `).join('')
+
+  // ── Footer summary rows ──
+  const footerHTML = `
+    <tr class="meta-row meta-row-budget">
+      <td>Budget hours</td><td class="wtd-cell">${s.budgetHours}h</td>
+      ${s.budgetByDay.map((_, i) => `<td>${Math.round(s.budgetHours / 7)}h</td>`).join('')}
+    </tr>
+    <tr class="meta-row meta-row-ly">
+      <td>Trending hours</td><td class="wtd-cell">${s.trendingHours}h</td>
+      ${s.actualByDay.map(v => `<td>${v}h</td>`).join('')}
+    </tr>
+    <tr class="actual-hours-row">
+      <td>Actual Hours</td>
+      <td class="${isOverBudget ? 'wtd-actual-over' : ''}">${actualTotal}h</td>
+      ${s.actualByDay.map(v => `<td>${v}h</td>`).join('')}
+    </tr>
+  `
 
   content.innerHTML = `
     <div class="showcase-banner">
@@ -82,50 +179,10 @@
       Showcase mode &mdash; schedule reflects fictional employees and mock shift data.
     </div>
 
-    <!-- Week summary stats -->
-    <div class="grid-4 mb-24">
-      <div class="stat-card">
-        <div class="stat-label">Budget Hours</div>
-        <div class="stat-val">${s.budgetHours}</div>
-        <div class="stat-sub">This week target</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Trending Hours</div>
-        <div class="stat-val">${s.trendingHours}</div>
-        <div class="stat-sub" style="color:var(--sage)">-7 vs budget</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Staff on Floor</div>
-        <div class="stat-val">${s.employees.length}</div>
-        <div class="stat-sub">Active this week</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Coverage Days</div>
-        <div class="stat-val">7</div>
-        <div class="stat-sub">Full week coverage</div>
-      </div>
-    </div>
+    ${weekNavHTML}
+    ${statCardsHTML}
+    ${legendHTML}
 
-    <!-- Week navigator -->
-    <div class="flex items-center justify-between mb-16">
-      <div>
-        <div style="font-size:14px;font-weight:600;color:var(--charcoal)">
-          ${s.store} &nbsp;&middot;&nbsp; ${s.weekOf}
-        </div>
-      </div>
-      <div class="flex gap-8">
-        <button class="btn btn-ghost" style="padding:7px 14px">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-          Prev Week
-        </button>
-        <button class="btn btn-ghost" style="padding:7px 14px">
-          Next Week
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Schedule grid -->
     <div class="card">
       <div class="schedule-wrap">
         <table class="schedule-table">
@@ -137,60 +194,13 @@
             </tr>
           </thead>
           <tbody>
-
-            <!-- Meta: Budget row -->
-            <tr class="sched-meta-row">
-              <td>Budget Goal</td>
-              <td></td>
-              <td>$685</td><td>$623</td><td>$598</td><td>$712</td><td>$688</td><td>$760</td><td>$734</td>
-            </tr>
-
-            <!-- Meta: LY row -->
-            <tr class="sched-meta-row">
-              <td>LY Net</td>
-              <td></td>
-              <td>$702</td><td>$598</td><td>$611</td><td>$685</td><td>$674</td><td>$788</td><td>$751</td>
-            </tr>
-
-            <!-- Meta: Power Hour -->
-            <tr class="sched-meta-row">
-              <td style="color:var(--clay)">Power Hour</td>
-              <td></td>
-              ${powerRow}
-            </tr>
-
-            <!-- Employee rows -->
+            ${budgetRow}
+            ${lyRow}
+            ${powerRow}
             ${employeeRows}
-
-            <!-- Meta: Actual hours -->
-            <tr class="sched-meta-row" style="border-top:2px solid var(--border)">
-              <td style="color:var(--blue)">Actual Hours</td>
-              <td style="font-weight:700;color:var(--charcoal)">141h</td>
-              <td>28h</td><td>22h</td><td>22h</td><td>26h</td><td>22h</td><td>14h</td><td>7h</td>
-            </tr>
-
+            ${footerHTML}
           </tbody>
         </table>
-      </div>
-    </div>
-
-    <!-- Legend -->
-    <div class="flex gap-16 mb-24" style="margin-top:16px;flex-wrap:wrap">
-      <div class="flex items-center gap-8">
-        <span class="shift-cell shift-work" style="font-size:10px">10AM–6PM</span>
-        <span class="text-xs text-mid">Work shift</span>
-      </div>
-      <div class="flex items-center gap-8">
-        <span class="shift-off">OFF</span>
-        <span class="text-xs text-mid">Day off</span>
-      </div>
-      <div class="flex items-center gap-8">
-        <span class="shift-cell" style="background:rgba(196,162,74,0.15);color:#9A7820;font-size:10px;padding:3px 7px;border-radius:4px">PTO</span>
-        <span class="text-xs text-mid">Paid time off</span>
-      </div>
-      <div class="flex items-center gap-8">
-        <span class="shift-cell shift-power" style="font-size:9px;padding:3px 7px;border-radius:4px">1–3PM</span>
-        <span class="text-xs text-mid">Power Hour window</span>
       </div>
     </div>
   `

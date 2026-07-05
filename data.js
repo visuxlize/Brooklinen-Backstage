@@ -91,7 +91,13 @@ const SCHEDULE_DATA = {
     },
   ],
   days: ['Sun 6/29', 'Mon 6/30', 'Tue 7/1', 'Wed 7/2', 'Thu 7/3', 'Fri 7/4', 'Sat 7/5'],
+  dayNums: ['29', '30', '1', '2', '3', '4', '5'],
   powerHour: ['12–2PM', '12–2PM', '12–2PM', '12–2PM', '1–3PM', '2–4PM', '1–3PM'],
+  budgetByDay: [685, 623, 598, 712, 688, 760, 734],
+  lyByDay:     [702, 598, 611, 685, 674, 788, 751],
+  actualByDay: [28, 22, 22, 26, 22, 14, 7],
+  weekIdx: 4,
+  totalWeeks: 8,
 }
 
 const RTO_DATA = {
@@ -187,7 +193,113 @@ const TRAFFIC_DATA = {
   ],
 }
 
+const DASHBOARD_MODULES = [
+  {
+    title: 'Schedule',
+    desc: 'Build and publish the weekly staff schedule with budget tracking.',
+    href: 'schedule.html',
+    color: 'linear-gradient(135deg,#2563EB,#1D4ED8)',
+    icon: 'calendar',
+  },
+  {
+    title: 'Daily Ops',
+    desc: 'Checklists and daily walkthroughs for opening and closing.',
+    href: '#',
+    color: 'linear-gradient(135deg,#7C3AED,#6D28D9)',
+    icon: 'clipboard',
+  },
+  {
+    title: 'Availability',
+    desc: 'Review team availability windows before building schedules.',
+    href: '#',
+    color: 'linear-gradient(135deg,#16A34A,#15803D)',
+    icon: 'users',
+  },
+  {
+    title: 'Traffic',
+    desc: 'Store traffic trends, peak windows, and staffing projections.',
+    href: 'traffic.html',
+    color: 'linear-gradient(135deg,#F59E0B,#D97706)',
+    icon: 'chart',
+  },
+  {
+    title: 'Time Off',
+    desc: 'Approve or deny PTO, RTO, and comp day requests.',
+    href: 'rto.html',
+    color: 'linear-gradient(135deg,#475569,#334155)',
+    icon: 'file',
+  },
+]
+
+const CALENDAR_DATA = {
+  connected: true,
+  month: 'July 2026',
+  today: 2,
+  daysInMonth: 31,
+  startWeekday: 3, // Wed 7/1 is a Wednesday -> index of the 1st (0=Sun)
+  eventDays: [2, 4, 9, 14, 18, 24],
+  events: [
+    { when: 'Today, 3:00 PM', title: 'Regional walkthrough w/ Area Manager' },
+    { when: 'Fri, Jul 4', title: 'Store closed — Independence Day', promo: true },
+    { when: 'Tue, Jul 14', title: 'Summer Sale kickoff', promo: true },
+    { when: 'Sat, Jul 18', title: 'New hire onboarding — Priya shadow shift' },
+  ],
+}
+
+const PROMOTIONS_DATA = [
+  { name: 'Summer Linen Sale', dates: 'Jul 14 – Jul 27, 2026', desc: '20% off all linen sheet sets storewide.' },
+  { name: 'Referral Weekend', dates: 'Jul 18 – Jul 20, 2026', desc: 'Double loyalty points for referred customers.' },
+  { name: 'Back to School Bedding', dates: 'Aug 1 – Aug 14, 2026', desc: 'Dorm bundle promo, feature near entrance.' },
+  { name: 'Labor Day Preview', dates: 'Aug 28 – Sep 1, 2026', desc: 'Early access pricing for loyalty members.' },
+]
+
+const QUICK_LINKS_DATA = [
+  { label: 'Visual Merchandising Guide', url: 'brooklinen.com/vm-guide' },
+  { label: 'POS Troubleshooting', url: 'brooklinen.com/pos-help' },
+  { label: 'Store Ops Handbook', url: 'brooklinen.com/handbook' },
+]
+
+// Extra traffic tables (5-week projection, peak hours, weekly history)
+TRAFFIC_DATA.projection = {
+  lyTraffic:    [612, 598, 634, 701, 745],
+  projected:    [660, 645, 690, 758, 812],
+  dayShare: {
+    Sun: [17, 16, 17, 18, 17],
+    Mon: [11, 10, 11, 11, 11],
+    Tue: [11, 11, 11, 11, 11],
+    Wed: [12, 13, 12, 13, 12],
+    Thu: [13, 13, 13, 14, 14],
+    Fri: [16, 16, 16, 15, 16],
+    Sat: [20, 21, 20, 18, 19],
+  },
+  weeks: ['Wk of Jul 6', 'Wk of Jul 13', 'Wk of Jul 20', 'Wk of Jul 27', 'Wk of Aug 3'],
+}
+
+TRAFFIC_DATA.peakHours = [
+  { day: 'Sun', peak: '1PM – 2PM', second: '12PM – 1PM', slow: '10AM – 11AM', window: '1–3PM', pctOfDaily: '19%' },
+  { day: 'Mon', peak: '5PM – 6PM', second: '12PM – 1PM', slow: '10AM – 11AM', window: '5–7PM', pctOfDaily: '16%' },
+  { day: 'Tue', peak: '12PM – 1PM', second: '5PM – 6PM', slow: '10AM – 11AM', window: '12–2PM', pctOfDaily: '17%' },
+  { day: 'Wed', peak: '1PM – 3PM', second: '5PM – 6PM', slow: '10AM – 11AM', window: '1–3PM', pctOfDaily: '18%' },
+  { day: 'Thu', peak: '1PM – 3PM', second: '4PM – 5PM', slow: '10AM – 11AM', window: '1–3PM', pctOfDaily: '17%' },
+  { day: 'Fri', peak: '2PM – 4PM', second: '5PM – 6PM', slow: '10AM – 11AM', window: '2–4PM', pctOfDaily: '19%' },
+  { day: 'Sat', peak: '1PM – 3PM', second: '11AM – 12PM', slow: '6PM – 7PM', window: '1–3PM', pctOfDaily: '22%' },
+]
+
+TRAFFIC_DATA.history = [
+  { weekOf: 'Jun 29', sun: 142, mon: 87, tue: 94, wed: 107, thu: 118, fri: 134, sat: 165, total: 847 },
+  { weekOf: 'Jun 22', sun: 128, mon: 91, tue: 88, wed: 99, thu: 112, fri: 140, sat: 158, total: 816 },
+  { weekOf: 'Jun 15', sun: 135, mon: 84, tue: 97, wed: 104, thu: 120, fri: 128, sat: 149, total: 817 },
+  { weekOf: 'Jun 8',  sun: 119, mon: 79, tue: 85, wed: 96,  thu: 103, fri: 122, sat: 144, total: 748 },
+  { weekOf: 'Jun 1',  sun: 147, mon: 96, tue: 101, wed: 112, thu: 125, fri: 138, sat: 171, total: 890 },
+  { weekOf: 'May 25', sun: 131, mon: 88, tue: 92,  wed: 105, thu: 114, fri: 130, sat: 156, total: 816 },
+  { weekOf: 'May 18', sun: 124, mon: 82, tue: 90,  wed: 98,  thu: 108, fri: 124, sat: 151, total: 777 },
+  { weekOf: 'May 11', sun: 138, mon: 93, tue: 96,  wed: 110, thu: 119, fri: 133, sat: 162, total: 851 },
+]
+
 // Export for use in page scripts
 if (typeof module !== 'undefined') {
-  module.exports = { STORES, ACTIVE_STORE, DASHBOARD_DATA, SCHEDULE_DATA, RTO_DATA, TRAFFIC_DATA }
+  module.exports = {
+    STORES, ACTIVE_STORE, DASHBOARD_DATA, SCHEDULE_DATA, RTO_DATA, TRAFFIC_DATA,
+    DASHBOARD_MODULES, CALENDAR_DATA, PROMOTIONS_DATA, QUICK_LINKS_DATA,
+  }
 }

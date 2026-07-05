@@ -5,53 +5,125 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backstage — Dashboard</title>
   <link rel="stylesheet" href="style.css">
+  <script>
+    (function(){try{var t=localStorage.getItem('backstage_theme');if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}})();
+  </script>
 </head>
 <body>
 
-<div class="app-shell"><!-- filled by nav.js --></div>
+<div class="app-shell"></div>
 
 <script src="data.js"></script>
 <script src="nav.js"></script>
 <script>
-  const content = renderShell({
-    page: 'dashboard',
-    title: 'Dashboard',
-    subtitle: DASHBOARD_DATA.date,
-  })
+  const content = renderShell({ page: 'dashboard', title: 'Dashboard' })
 
-  /**
-   * Build the dashboard layout.
-   * Three sections:
-   *   1. Goal tile + today's metrics table (top row)
-   *   2. All-store summary cards (bottom grid)
-   */
-
-  const d = DASHBOARD_DATA
-
-  // Determine status color for variance cells
-  function varianceColor(v) {
-    if (v.startsWith('+')) return 'color:var(--green-soft);font-weight:600'
-    if (v.startsWith('-')) return 'color:var(--clay);font-weight:600'
-    return ''
+  const MODULE_ICONS = {
+    calendar: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+    clipboard: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="16" y2="15"/></svg>`,
+    users: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    chart: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>`,
+    file: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
   }
 
-  // Status dot + label for store cards
-  function statusDot(status) {
-    const map = {
-      'ahead':    ['dot-ahead',    'Ahead'],
-      'on-track': ['dot-on-track', 'On Track'],
-      'behind':   ['dot-behind',   'Behind'],
+  const moduleCardsHTML = DASHBOARD_MODULES.map((m) => `
+    <a class="module-card" href="${m.href}" ${m.href === '#' ? `onclick="showcaseToast('Not included in this showcase'); return false"` : ''}>
+      <div class="module-icon" style="background:${m.color}">${MODULE_ICONS[m.icon]}</div>
+      <div>
+        <div class="module-title">${m.title}</div>
+        <div class="module-desc">${m.desc}</div>
+      </div>
+      <span class="module-link">Open &rarr;</span>
+    </a>
+  `).join('')
+
+  // ── Calendar widget ──
+  const cal = CALENDAR_DATA
+  function buildCalendarGrid() {
+    const dow = ['S','M','T','W','T','F','S']
+    let cells = dow.map(d => `<div class="calendar-dow">${d}</div>`).join('')
+    for (let i = 0; i < cal.startWeekday; i++) cells += `<div class="calendar-day muted"></div>`
+    for (let d = 1; d <= cal.daysInMonth; d++) {
+      const isToday = d === cal.today
+      const hasEvent = cal.eventDays.includes(d)
+      cells += `<div class="calendar-day ${isToday ? 'today' : ''} ${hasEvent ? 'has-event' : ''}">${d}</div>`
     }
-    const [cls, label] = map[status] || ['dot-on-track', 'On Track']
-    return `<span class="status-dot ${cls}"></span> <span style="font-size:10px;color:var(--mid)">${label}</span>`
+    return cells
   }
 
-  // SPA bar color
-  function spaBarColor(pct) {
-    if (pct >= 100) return 'var(--sage)'
-    if (pct >= 80)  return 'var(--gold)'
-    return 'var(--clay)'
-  }
+  const calendarEventsHTML = cal.events.map(e => `
+    <div class="calendar-event-row">
+      <span class="calendar-event-when">${e.when}</span>
+      <span class="calendar-event-title" style="text-align:right">${e.title}${e.promo ? ' <span class=\"chip chip-amber chip-sm\">Promo</span>' : ''}</span>
+    </div>
+  `).join('')
+
+  const calendarHTML = cal.connected ? `
+    <div class="card mb-16">
+      <div class="card-header">
+        <span class="card-title">Calendar</span>
+        <span class="chip chip-green chip-sm">Connected</span>
+      </div>
+      <div class="card-body">
+        <div class="calendar-month-label">${cal.month}</div>
+        <div class="calendar-grid">${buildCalendarGrid()}</div>
+        <div class="calendar-events-list">${calendarEventsHTML}</div>
+        <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px">
+          <a href="#" class="text-sm text-muted" style="text-decoration:none" onclick="showcaseToast('Not included in this showcase'); return false">Disconnect</a>
+        </div>
+      </div>
+    </div>
+  ` : `
+    <div class="card mb-16">
+      <div class="card-body flex flex-col items-center gap-8" style="text-align:center;padding:32px 20px">
+        <div class="card-title">Google Calendar</div>
+        <div class="text-sm text-muted">Connect your calendar to see upcoming events here.</div>
+        <button class="btn btn-primary btn-sm">Connect Calendar</button>
+      </div>
+    </div>
+  `
+
+  // ── Promotions panel ──
+  const shownPromos = PROMOTIONS_DATA.slice(0, 3)
+  const promotionsHTML = `
+    <div class="card mb-16">
+      <div class="card-header">
+        <span class="card-title">Upcoming Promotions</span>
+      </div>
+      <div class="card-body">
+        ${shownPromos.map(p => `
+          <div class="promo-item">
+            <div>
+              <div class="promo-name">${p.name}</div>
+              <div class="promo-dates">${p.dates}</div>
+              <div class="promo-desc">${p.desc}</div>
+            </div>
+          </div>
+        `).join('')}
+        ${PROMOTIONS_DATA.length > 3 ? `<a href="#" class="see-all-link" onclick="showcaseToast('Not included in this showcase'); return false">See all (${PROMOTIONS_DATA.length}) &rarr;</a>` : ''}
+      </div>
+    </div>
+  `
+
+  // ── Quick links panel ──
+  const quickLinksHTML = `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Quick Links</span>
+      </div>
+      <div class="card-body">
+        ${QUICK_LINKS_DATA.map(l => `
+          <div class="quicklink-item">
+            <div>
+              <div class="quicklink-label">${l.label}</div>
+              <div class="quicklink-url">${l.url}</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `
 
   content.innerHTML = `
     <div class="showcase-banner">
@@ -59,103 +131,22 @@
       Showcase mode — all data is fictional and for demonstration only. Not connected to live store systems.
     </div>
 
-    <!-- TOP ROW: SPA Goal + Today's Metrics -->
-    <div class="grid-2 mb-24">
-
-      <!-- SPA Goal Tile -->
-      <div class="goal-tile">
-        <div class="goal-label">Today's SPA Goal &mdash; Lincoln Park</div>
-        <div class="goal-amount">$${d.spa.goal.toLocaleString()}</div>
-        <div class="goal-meta">
-          ${d.spa.percent}% to target &nbsp;&middot;&nbsp;
-          $${d.spa.actual.toLocaleString()} sold &nbsp;&middot;&nbsp;
-          ${d.spa.hoursLeft} hrs left in shift
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" id="goal-bar" style="width:0%"></div>
-        </div>
-      </div>
-
-      <!-- Today's Metrics Table -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Today's Metrics</span>
-          <span style="font-size:10px;color:var(--mid);">vs Budget &nbsp;|&nbsp; vs LY</span>
-        </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th>Budget</th>
-              <th>Actual</th>
-              <th>LY</th>
-              <th>vs LY</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${d.storeSummary.map(row => `
-              <tr>
-                <td style="font-weight:600;color:var(--charcoal)">${row.label}</td>
-                <td>${row.budget}</td>
-                <td style="font-weight:600;color:var(--charcoal)">${row.actual}</td>
-                <td>${row.ly}</td>
-                <td style="${varianceColor(row.variance)}">${row.variance}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-
+    <div class="mb-24">
+      <div class="page-h1">Welcome back, Andres</div>
+      <div class="page-sub">Backstage &middot; ${STORES[0].name}</div>
     </div>
 
-    <!-- ALL STORES SECTION -->
-    <div class="section-heading">All Store Performance</div>
-
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
-      ${d.allStores.map((store, i) => {
-        const colors = ['#2E5B8A','#6B8C6B','#B85C38','#C4A24A','#7B5EA7','#3D8A6B','#8A3D3D','#4A6B8A']
-        const initials = store.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
-        const color = colors[i] || '#2E5B8A'
-        return `
-          <div class="store-card">
-            <div class="store-card-top">
-              <div class="store-avatar" style="background:${color}">${initials}</div>
-              <div>
-                <div class="store-card-name">${store.name}</div>
-                <div class="store-card-city">${store.city}</div>
-              </div>
-            </div>
-            <div>
-              <div class="spa-meta mb-8">
-                <span class="spa-pct">${store.spa}%</span>
-                <span class="spa-rev">${store.revenue}</span>
-              </div>
-              <div class="spa-bar-track">
-                <div class="spa-bar-fill store-spa-bar"
-                     data-pct="${store.spa}"
-                     style="width:0%;background:${spaBarColor(store.spa)}">
-                </div>
-              </div>
-            </div>
-            <div class="flex items-center gap-8" style="margin-top:4px">
-              ${statusDot(store.status)}
-            </div>
-          </div>
-        `
-      }).join('')}
+    <div class="grid-5">
+      <div>
+        <div class="module-grid">${moduleCardsHTML}</div>
+      </div>
+      <div>
+        ${calendarHTML}
+        ${promotionsHTML}
+        ${quickLinksHTML}
+      </div>
     </div>
   `
-
-  // Animate bars after paint
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      document.getElementById('goal-bar').style.width = d.spa.percent + '%'
-      document.querySelectorAll('.store-spa-bar').forEach(el => {
-        const pct = Math.min(parseInt(el.dataset.pct), 100)
-        el.style.width = pct + '%'
-      })
-    })
-  })
 </script>
 
 </body>
