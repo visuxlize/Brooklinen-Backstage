@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backstage — Traffic</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-shell"></div>
+
+<script src="data.js"></script>
+<script src="nav.js"></script>
+<script>
+  const content = renderShell({
+    page: 'traffic',
+    title: 'Traffic',
+    subtitle: `Week of ${TRAFFIC_DATA.weekOf} &nbsp;&middot;&nbsp; ${TRAFFIC_DATA.store}`,
+  })
+
+  const t = TRAFFIC_DATA
+  const maxDaily = Math.max(...t.daily.map(d => d.count))
+  const maxHourly = Math.max(...t.hourly.map(h => h.count))
+
+  content.innerHTML = `
+    <div class="showcase-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Showcase mode &mdash; traffic figures are realistic mock data for demonstration.
+    </div>
+
+    <!-- Stat cards -->
+    <div class="grid-4 mb-24">
+      <div class="stat-card">
+        <div class="stat-label">Total Traffic</div>
+        <div class="stat-val">${t.stats.totalTraffic.toLocaleString()}</div>
+        <div class="stat-sub">This week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Trend Multiplier</div>
+        <div class="stat-val" style="color:var(--sage)">x${t.stats.trendMultiplier}</div>
+        <div class="stat-sub">vs baseline</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Peak Window</div>
+        <div class="stat-val" style="font-size:22px;padding-top:4px">${t.stats.peakWindow}</div>
+        <div class="stat-sub">Daily average</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Allowable Hours</div>
+        <div class="stat-val">${t.stats.allowableHours}</div>
+        <div class="stat-sub">Based on traffic model</div>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid-2 mb-24">
+
+      <!-- Daily bar chart -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Daily Traffic</span>
+          <span style="font-size:10px;color:var(--mid)">vs Budget</span>
+        </div>
+        <div class="card-body">
+          ${t.daily.map(day => {
+            const fillPct = Math.round((day.count / maxDaily) * 100)
+            const budgetPct = Math.round((day.budget / maxDaily) * 100)
+            const isHighest = day.count === maxDaily
+            return `
+              <div class="traffic-bar-row">
+                <span class="traffic-day" style="${isHighest ? 'color:var(--blue);' : ''}">${day.day}</span>
+                <div style="flex:1;position:relative">
+                  <!-- Budget line -->
+                  <div style="
+                    position:absolute;top:0;bottom:0;
+                    left:${budgetPct}%;
+                    width:1px;background:var(--faint);
+                    z-index:1;
+                  "></div>
+                  <div class="traffic-track">
+                    <div class="traffic-fill traffic-anim"
+                         data-pct="${fillPct}"
+                         style="width:0%;background:${isHighest ? 'var(--blue)' : 'var(--slate)'}">
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:52px">
+                  <span class="traffic-count" style="color:var(--charcoal);font-weight:600">${day.count}</span>
+                  <span style="font-size:9px;color:var(--faint)">/ ${day.budget}</span>
+                </div>
+              </div>
+            `
+          }).join('')}
+
+          <div style="margin-top:12px;display:flex;gap:16px;font-size:10px;color:var(--mid);align-items:center">
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:20px;height:4px;background:var(--slate);border-radius:2px"></div>
+              Actual
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:1px;height:12px;background:var(--faint)"></div>
+              Budget
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hourly breakdown -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Hourly Breakdown</span>
+          <span style="font-size:10px;color:var(--mid)">Avg per hour</span>
+        </div>
+        <div class="card-body">
+          ${t.hourly.map(h => {
+            const fillPct = Math.round((h.count / maxHourly) * 100)
+            const isPeak = h.count === maxHourly
+            return `
+              <div class="traffic-bar-row">
+                <span class="traffic-day" style="width:40px;font-size:10px;${isPeak ? 'color:var(--clay)' : ''}">${h.hour}</span>
+                <div class="traffic-track">
+                  <div class="traffic-fill hourly-anim"
+                       data-pct="${fillPct}"
+                       style="width:0%;background:${isPeak ? 'var(--clay)' : 'var(--blue)'}">
+                  </div>
+                </div>
+                <span class="traffic-count" style="${isPeak ? 'color:var(--clay);font-weight:700' : ''}">${h.count}</span>
+              </div>
+            `
+          }).join('')}
+
+          <div style="margin-top:14px;padding:10px 12px;border-radius:6px;background:rgba(184,92,56,0.07);border:1px solid rgba(184,92,56,0.15)">
+            <div style="font-size:9px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;color:var(--clay);margin-bottom:4px">Power Hour</div>
+            <div style="font-size:13px;font-weight:600;color:var(--charcoal)">${t.stats.peakWindow}</div>
+            <div style="font-size:10px;color:var(--mid);margin-top:2px">Drives schedule Power Hour row</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Weekly summary table -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Weekly Summary</span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Actual Traffic</th>
+            <th>Budget</th>
+            <th>Variance</th>
+            <th>% of Week</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${t.daily.map(day => {
+            const variance = day.count - day.budget
+            const varStr = (variance >= 0 ? '+' : '') + variance
+            const varColor = variance >= 0 ? 'color:var(--sage);font-weight:600' : 'color:var(--clay);font-weight:600'
+            const weekPct = Math.round((day.count / t.stats.totalTraffic) * 100)
+            return `
+              <tr>
+                <td style="font-weight:600;color:var(--charcoal)">${day.day}</td>
+                <td style="font-weight:600;color:var(--charcoal)">${day.count}</td>
+                <td>${day.budget}</td>
+                <td style="${varColor}">${varStr}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="width:60px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+                      <div style="height:100%;width:${weekPct}%;background:var(--blue);border-radius:2px"></div>
+                    </div>
+                    <span style="font-size:11px;color:var(--mid)">${weekPct}%</span>
+                  </div>
+                </td>
+              </tr>
+            `
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `
+
+  // Animate all bars after paint
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.traffic-anim, .hourly-anim').forEach(el => {
+        el.style.transition = 'width 1.2s cubic-bezier(0.4, 0, 0.2, 1)'
+        el.style.width = el.dataset.pct + '%'
+      })
+    })
+  })
+</script>
+
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backstage — Access</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* subtle animated background */
+    body {
+      background: var(--charcoal);
+      background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(184,92,56,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(46,91,138,0.06) 0%, transparent 50%);
+    }
+  </style>
+</head>
+<body>
+
+<div class="gate-wrap">
+  <div class="gate-card">
+    <div class="gate-brand">Brooklinen &nbsp;/&nbsp; Internal</div>
+
+    <h1 class="gate-headline">Backstage</h1>
+    <p class="gate-sub">
+      Retail operations platform.<br>
+      Enter your access code to continue.
+    </p>
+
+    <label class="gate-label" for="passcode">Access Code</label>
+    <input
+      class="gate-input"
+      id="passcode"
+      type="password"
+      placeholder="········"
+      autocomplete="off"
+      autofocus
+    >
+
+    <button class="gate-btn" id="enter-btn">Enter Backstage</button>
+    <div class="gate-error" id="error-msg"></div>
+
+    <div class="gate-footer">
+      Showcase build &nbsp;·&nbsp; Read-only demo with mock data<br>
+      Not connected to live store systems
+    </div>
+  </div>
+</div>
+
+<script>
+  /**
+   * Passcode gate logic.
+   *
+   * WHY sessionStorage?
+   * We store a simple flag in sessionStorage so the user doesn't have
+   * to re-enter the code when navigating between pages in the same tab.
+   * sessionStorage clears automatically when the tab is closed -- better
+   * than localStorage for a showcase that should "expire" naturally.
+   *
+   * The passcode is hashed with a simple comparison here. For a real
+   * production app you'd never do auth client-side, but for a static
+   * showcase with no backend this is the appropriate tradeoff.
+   */
+
+  const PASSCODE = '1q2w3e4r5t'
+  const SESSION_KEY = 'backstage_access'
+
+  // If already authenticated in this session, skip straight to dashboard
+  if (sessionStorage.getItem(SESSION_KEY) === 'granted') {
+    window.location.href = 'dashboard.html'
+  }
+
+  const input  = document.getElementById('passcode')
+  const btn    = document.getElementById('enter-btn')
+  const errMsg = document.getElementById('error-msg')
+
+  function attempt() {
+    const val = input.value.trim()
+
+    if (val === PASSCODE) {
+      sessionStorage.setItem(SESSION_KEY, 'granted')
+      btn.textContent = 'Opening...'
+      btn.style.opacity = '0.7'
+      setTimeout(() => { window.location.href = 'dashboard.html' }, 300)
+    } else {
+      errMsg.textContent = 'Incorrect access code. Please try again.'
+      input.classList.add('error')
+      input.value = ''
+      input.focus()
+      setTimeout(() => {
+        input.classList.remove('error')
+        errMsg.textContent = ''
+      }, 3000)
+    }
+  }
+
+  btn.addEventListener('click', attempt)
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') attempt() })
+</script>
+
+</body>
+</html>
