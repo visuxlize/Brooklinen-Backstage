@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backstage — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-shell"><!-- filled by nav.js --></div>
+
+<script src="data.js"></script>
+<script src="nav.js"></script>
+<script>
+  const content = renderShell({
+    page: 'dashboard',
+    title: 'Dashboard',
+    subtitle: DASHBOARD_DATA.date,
+  })
+
+  /**
+   * Build the dashboard layout.
+   * Three sections:
+   *   1. Goal tile + today's metrics table (top row)
+   *   2. All-store summary cards (bottom grid)
+   */
+
+  const d = DASHBOARD_DATA
+
+  // Determine status color for variance cells
+  function varianceColor(v) {
+    if (v.startsWith('+')) return 'color:var(--green-soft);font-weight:600'
+    if (v.startsWith('-')) return 'color:var(--clay);font-weight:600'
+    return ''
+  }
+
+  // Status dot + label for store cards
+  function statusDot(status) {
+    const map = {
+      'ahead':    ['dot-ahead',    'Ahead'],
+      'on-track': ['dot-on-track', 'On Track'],
+      'behind':   ['dot-behind',   'Behind'],
+    }
+    const [cls, label] = map[status] || ['dot-on-track', 'On Track']
+    return `<span class="status-dot ${cls}"></span> <span style="font-size:10px;color:var(--mid)">${label}</span>`
+  }
+
+  // SPA bar color
+  function spaBarColor(pct) {
+    if (pct >= 100) return 'var(--sage)'
+    if (pct >= 80)  return 'var(--gold)'
+    return 'var(--clay)'
+  }
+
+  content.innerHTML = `
+    <div class="showcase-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Showcase mode — all data is fictional and for demonstration only. Not connected to live store systems.
+    </div>
+
+    <!-- TOP ROW: SPA Goal + Today's Metrics -->
+    <div class="grid-2 mb-24">
+
+      <!-- SPA Goal Tile -->
+      <div class="goal-tile">
+        <div class="goal-label">Today's SPA Goal &mdash; Lincoln Park</div>
+        <div class="goal-amount">$${d.spa.goal.toLocaleString()}</div>
+        <div class="goal-meta">
+          ${d.spa.percent}% to target &nbsp;&middot;&nbsp;
+          $${d.spa.actual.toLocaleString()} sold &nbsp;&middot;&nbsp;
+          ${d.spa.hoursLeft} hrs left in shift
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="goal-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Today's Metrics Table -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Today's Metrics</span>
+          <span style="font-size:10px;color:var(--mid);">vs Budget &nbsp;|&nbsp; vs LY</span>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Budget</th>
+              <th>Actual</th>
+              <th>LY</th>
+              <th>vs LY</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.storeSummary.map(row => `
+              <tr>
+                <td style="font-weight:600;color:var(--charcoal)">${row.label}</td>
+                <td>${row.budget}</td>
+                <td style="font-weight:600;color:var(--charcoal)">${row.actual}</td>
+                <td>${row.ly}</td>
+                <td style="${varianceColor(row.variance)}">${row.variance}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- ALL STORES SECTION -->
+    <div class="section-heading">All Store Performance</div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+      ${d.allStores.map((store, i) => {
+        const colors = ['#2E5B8A','#6B8C6B','#B85C38','#C4A24A','#7B5EA7','#3D8A6B','#8A3D3D','#4A6B8A']
+        const initials = store.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
+        const color = colors[i] || '#2E5B8A'
+        return `
+          <div class="store-card">
+            <div class="store-card-top">
+              <div class="store-avatar" style="background:${color}">${initials}</div>
+              <div>
+                <div class="store-card-name">${store.name}</div>
+                <div class="store-card-city">${store.city}</div>
+              </div>
+            </div>
+            <div>
+              <div class="spa-meta mb-8">
+                <span class="spa-pct">${store.spa}%</span>
+                <span class="spa-rev">${store.revenue}</span>
+              </div>
+              <div class="spa-bar-track">
+                <div class="spa-bar-fill store-spa-bar"
+                     data-pct="${store.spa}"
+                     style="width:0%;background:${spaBarColor(store.spa)}">
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-8" style="margin-top:4px">
+              ${statusDot(store.status)}
+            </div>
+          </div>
+        `
+      }).join('')}
+    </div>
+  `
+
+  // Animate bars after paint
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.getElementById('goal-bar').style.width = d.spa.percent + '%'
+      document.querySelectorAll('.store-spa-bar').forEach(el => {
+        const pct = Math.min(parseInt(el.dataset.pct), 100)
+        el.style.width = pct + '%'
+      })
+    })
+  })
+</script>
+
+</body>
+</html>

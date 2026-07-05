@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backstage — Time Off</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-shell"></div>
+
+<script src="data.js"></script>
+<script src="nav.js"></script>
+<script>
+  const content = renderShell({
+    page: 'rto',
+    title: 'Time Off Requests',
+    subtitle: `${RTO_DATA.pending.length} pending &nbsp;&middot;&nbsp; Lincoln Park`,
+  })
+
+  const { pending, resolved } = RTO_DATA
+
+  /**
+   * Returns the appropriate badge HTML for a request type.
+   * Types: RTO, PTO, COMP, Sick
+   */
+  function typeBadge(type) {
+    const map = {
+      'PTO':  'badge-pto',
+      'RTO':  'badge-rto',
+      'COMP': 'badge-comp',
+      'Sick': 'badge-sick',
+    }
+    return `<span class="badge ${map[type] || 'badge-rto'}">${type}</span>`
+  }
+
+  function statusBadge(status) {
+    const map = {
+      'approved': ['badge-approved', 'Approved'],
+      'denied':   ['badge-denied',   'Denied'],
+      'pending':  ['badge-pending',  'Pending'],
+    }
+    const [cls, label] = map[status] || ['badge-pending', 'Pending']
+    return `<span class="badge ${cls}">${label}</span>`
+  }
+
+  /**
+   * Pending request card builder.
+   * In the real app these have functional approve/deny buttons.
+   * In showcase mode buttons show a "read-only" toast.
+   */
+  function pendingCard(req) {
+    return `
+      <div class="rto-card" id="req-${req.id}">
+        <div class="rto-card-header">
+          <div>
+            <div class="rto-name">${req.name}</div>
+            <div class="rto-dates">${req.dates}</div>
+            <div class="rto-submitted">Submitted ${req.submitted}</div>
+          </div>
+          <div>${typeBadge(req.type)}</div>
+        </div>
+
+        ${req.note ? `<div class="rto-note">"${req.note}"</div>` : ''}
+
+        <div class="rto-actions">
+          <button class="btn btn-approve" onclick="showcaseAction(this, 'approve')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Approve
+          </button>
+          <button class="btn btn-deny" onclick="showcaseAction(this, 'deny')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Deny
+          </button>
+        </div>
+      </div>
+    `
+  }
+
+  function resolvedCard(req) {
+    return `
+      <div class="rto-card">
+        <div class="rto-card-header">
+          <div>
+            <div class="rto-name">${req.name}</div>
+            <div class="rto-dates">${req.dates}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            ${typeBadge(req.type)}
+            ${statusBadge(req.status)}
+          </div>
+        </div>
+
+        ${req.leaderNote ? `
+          <div class="rto-leader-note">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            Leader note: ${req.leaderNote}
+          </div>
+        ` : ''}
+
+        <div class="rto-actions">
+          <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px" onclick="showcaseAction(this, 'undo')">
+            Undo
+          </button>
+        </div>
+      </div>
+    `
+  }
+
+  content.innerHTML = `
+    <div class="showcase-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Showcase mode &mdash; approve/deny buttons are non-functional. Requests are fictional.
+    </div>
+
+    <!-- Submit link banner -->
+    <div class="card mb-24">
+      <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--charcoal);margin-bottom:3px">Public Submit Link</div>
+          <div style="font-size:11px;color:var(--mid);font-family:monospace">
+            backstage.app/rto/submit?store=S01
+          </div>
+        </div>
+        <button class="btn btn-ghost" onclick="showcaseAction(this, 'copy')" style="font-size:11px;padding:7px 14px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy Link
+        </button>
+      </div>
+    </div>
+
+    <div class="grid-2">
+
+      <!-- Pending column -->
+      <div>
+        <div class="section-heading">
+          Pending
+          <span style="background:var(--clay);color:white;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">${pending.length}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${pending.map(pendingCard).join('')}
+        </div>
+      </div>
+
+      <!-- Resolved column -->
+      <div>
+        <div class="section-heading">Resolved</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${resolved.map(resolvedCard).join('')}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Toast element -->
+    <div id="toast" style="
+      position:fixed;bottom:28px;right:28px;
+      background:var(--charcoal);color:white;
+      font-size:12px;font-weight:500;
+      padding:12px 18px;border-radius:8px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.25);
+      opacity:0;transform:translateY(8px);
+      transition:opacity 0.2s,transform 0.2s;
+      pointer-events:none;z-index:999;
+    ">
+      Read-only in showcase mode
+    </div>
+  `
+
+  /**
+   * showcaseAction — intercepts button clicks and shows a toast
+   * explaining that the app is in read-only showcase mode.
+   * In the real app these trigger PATCH /api/rto/[id] calls.
+   */
+  function showcaseAction(btn, type) {
+    const toast = document.getElementById('toast')
+    const messages = {
+      approve: 'Approve triggers PATCH /api/rto/[id] + email notification',
+      deny:    'Deny triggers PATCH /api/rto/[id] + leader note + email',
+      undo:    'Undo resets request to pending status',
+      copy:    'Copies public submit URL to clipboard',
+    }
+    toast.textContent = messages[type] || 'Read-only in showcase mode'
+    toast.style.opacity = '1'
+    toast.style.transform = 'translateY(0)'
+    setTimeout(() => {
+      toast.style.opacity = '0'
+      toast.style.transform = 'translateY(8px)'
+    }, 2800)
+  }
+
+  // Make showcaseAction available globally since it's called from inline onclick
+  window.showcaseAction = showcaseAction
+</script>
+
+</body>
+</html>
