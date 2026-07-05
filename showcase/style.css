@@ -706,26 +706,28 @@ html.dark .showcase-banner { background: rgba(120,53,15,0.25); border-color: var
 .stat-sub { font-size: 12px; color: var(--text-muted); }
 
 /* ── MODULE CARDS (dashboard) ── */
-.module-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-@media (min-width: 640px) { .module-grid { grid-template-columns: 1fr 1fr; } }
+.module-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 560px) { .module-grid { grid-template-columns: 1fr 1fr; } }
 
 .module-card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: 20px;
+  padding: 14px 16px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 12px;
   text-decoration: none;
-  transition: box-shadow 0.15s, transform 0.15s;
+  transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
 }
-.module-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.module-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); border-color: var(--slate-300); }
+html.dark .module-card:hover { border-color: var(--slate-500); }
 
 .module-icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -733,10 +735,19 @@ html.dark .showcase-banner { background: rgba(120,53,15,0.25); border-color: var
   color: white;
   flex-shrink: 0;
 }
+.module-icon svg { width: 18px; height: 18px; }
 
-.module-title { font-size: 15px; font-weight: 600; color: var(--text); }
-.module-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
-.module-link { font-size: 13px; font-weight: 600; color: var(--accent); margin-top: auto; }
+.module-body { flex: 1; min-width: 0; }
+.module-body-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.module-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.module-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-top: 2px; }
+.module-link { font-size: 12px; font-weight: 700; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+
+/* ── SIDE-BY-SIDE PANEL ROW (promotions + quick links) ── */
+.panel-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 700px) { .panel-row { grid-template-columns: 1fr 1fr; } }
+.panel-row .card { display: flex; flex-direction: column; }
+.panel-row .card-body { flex: 1; max-height: 280px; overflow-y: auto; }
 
 /* ── CALENDAR WIDGET ── */
 .calendar-month-label { font-size: 13px; font-weight: 600; color: var(--text); }
@@ -1047,6 +1058,68 @@ html.dark .rto-note { color: var(--slate-300); background: rgba(51,65,85,0.4); }
 .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); font-size: 13px; }
 .empty-state-icon { width: 48px; height: 48px; border-radius: 50%; background: var(--slate-100); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: var(--slate-400); }
 html.dark .empty-state-icon { background: rgba(51,65,85,0.5); }
+
+/* ── DAILY OPS ── */
+.ops-links-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 500px) { .ops-links-row { grid-template-columns: 1fr 1fr; } }
+.ops-link-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+.ops-link-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.ops-link-url { font-size: 12px; color: var(--accent); font-family: monospace; }
+
+.running-pct-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.running-pct-box { border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 10px 12px; text-align: center; }
+.running-pct-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 4px; }
+.running-pct-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.running-pct-up { background: var(--green-50); border-color: var(--green-200); color: var(--green-700); }
+.running-pct-down { background: var(--red-50); border-color: var(--red-200); color: var(--red-700); }
+html.dark .running-pct-up { background: rgba(20,83,45,0.25); border-color: var(--green-700); }
+html.dark .running-pct-down { background: rgba(127,29,29,0.25); border-color: var(--red-700); }
+
+.note-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; display: block; }
+.note-box {
+  font-size: 13px;
+  color: var(--text);
+  background: var(--slate-50);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  line-height: 1.5;
+  min-height: 84px;
+}
+html.dark .note-box { background: rgba(51,65,85,0.3); }
+
+.zoning-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.zoning-row:last-child { border-bottom: none; }
+.zoning-emp { width: 130px; flex-shrink: 0; }
+.zoning-emp-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zoning-emp-role { font-size: 11px; color: var(--text-muted); }
+.zoning-track { flex: 1; height: 24px; border-radius: 6px; overflow: hidden; display: flex; background: var(--slate-100); min-width: 0; }
+html.dark .zoning-track { background: rgba(51,65,85,0.4); }
+.zoning-seg {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  border-right: 1px solid rgba(255,255,255,0.5);
+}
+.zoning-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; }
+.zoning-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
+.zoning-legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.zoning-time-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin: 6px 0 2px 142px; }
 
 /* ── TRAFFIC ── */
 .trend-chip-value { font-size: 20px; font-weight: 700; }

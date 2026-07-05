@@ -4,6 +4,29 @@
 
 ---
 
+## Showcase Mode
+
+Since this is a private, internal tool with real employee and sales data, the live app itself isn't public. Instead, [`/showcase`](showcase/) is a small **static demo** of the UI — deployed to GitHub Pages behind a light passcode gate:
+
+**[visuxlize.github.io/Brooklinen-Backstage](https://visuxlize.github.io/Brooklinen-Backstage/)**
+
+A few things worth knowing about it:
+
+- **It's read-only and disconnected.** Every page is static HTML/CSS/vanilla JS with fictional store, employee, and traffic data baked into `showcase/data.js`. There's no database, no API, no auth server behind it. Buttons like "Approve," "Upload," or "Save as image" show a toast explaining what they'd do in the real app instead of doing it.
+- **It mirrors the real design system**, not a simplified mock. Same navy/slate/blue palette, same Karla type, same sidebar/topbar/card components, dark mode, and page layouts as the actual Next.js app — just re-implemented in plain HTML/CSS/JS so it can be hosted for free on GitHub Pages without exposing the real codebase or any real data.
+- **The passcode is a light gate, not security.** It just keeps the demo out of casual search traffic; there's nothing sensitive behind it since all the data is fictional.
+- Pages included: Dashboard, Schedule, Daily Ops, Time Off (RTO), and Traffic.
+
+---
+
+## Why I Built This
+
+Brooklinen retail stores were running scheduling, time-off requests, and daily walkthroughs across a mix of spreadsheets, group chats, and paper. Building a schedule meant manually cross-referencing budget targets and last year's numbers; a time-off request meant a text message that someone had to remember to reflect on the actual schedule; and there was no single place that connected traffic patterns to staffing decisions.
+
+I built Backstage to put all of that in one app: a schedule that already knows the budget, last year's numbers, and the store's busiest hours; a time-off flow that updates the schedule automatically the moment a request is approved; and a daily ops view that gives a store leader their goals, zoning, and focus areas for the day without digging through five different tools. It's shaped entirely by what actually slows a store leader down day to day, not by a generic scheduling template.
+
+---
+
 ## What This Is
 
 Brooklinen Backstage is a single application that supports:
@@ -12,7 +35,7 @@ Brooklinen Backstage is a single application that supports:
 - **Request Time Off (RTO)** — Associates submit RTO/PTO/partial requests via a public form (no login). Leaders approve or deny in the app; approved requests automatically block schedule cells (OFF/PTO) and sync to availability.
 - **Availability** — Per-employee, per-day: Open, N/A, or Partial (time windows). Ongoing or week-specific. Approved RTO/PTO is overlaid when viewing a week.
 - **Traffic** — Upload traffic Excel; view weekly and hourly traffic. Peak windows per day feed the schedule “Power Hour” row.
-- **Daily Ops** — Morning wakeup (Cashlog, Returns links), zoning, actuals, recap notes. State is persisted by store and date.
+- **Daily Ops** — Morning wakeup (Cashlog, Returns links, KPI goals, running %), focus notes, and an employee zoning chart. State is persisted by store and date.
 - **Nightly Recap** — Store + date, weather, in-store events, actual sales, narratives. Export recap as PNG for reporting.
 - **Admin** — User management (create/link users to stores and roles). OPS/Area Manager see all stores; Store Leaders see their store only.
 
@@ -63,6 +86,7 @@ Key dependencies: `date-fns`, `lucide-react`, `zod`, `html2canvas` (schedule/rec
   roles, stores, auth, app-config, etc.
 /drizzle           # Generated SQL migrations
 /public            # Static assets
+/showcase          # Static, read-only UI demo (see Showcase Mode above) — not part of the Next.js app
 ```
 
 ### Data flow (conceptual)
@@ -163,7 +187,9 @@ The schedule grid and availability tab both use approved RTO/PTO when resolving 
 
 ### Daily Ops
 
-- Morning wakeup: links (e.g. Cashlog, Returns), no schedule link. By store and date; state in localStorage by store+date.
+- Morning wakeup: store + date, editable links (Cashlog, Returns), KPI goal cards (Budget, LY, Order/AOV/UPT/Conversion goals), running % (WTD/MTD/QTD).
+- Focus notes: current promotion, product updates, staff recognition, tasks for the day.
+- Employee zoning chart: 8AM–9PM in 15-minute blocks per employee, assign a role (Opening, LOD, Floor Support, Stockroom, Visual, Closing, Lunch, Office Time, Flex, Sick) to each block; consecutive same-role blocks merge into one labeled segment.
 
 ### Nightly Recap
 
@@ -172,39 +198,6 @@ The schedule grid and availability tab both use approved RTO/PTO when resolving 
 ### Admin
 
 - User management: create/link users (Supabase auth), assign role and store. OPS/Area Manager see all users; Store Leader sees only their store.
-
----
-
-## Local setup
-
-1. **Clone and install**
-   ```bash
-   git clone <repo-url>
-   cd Brooklinen-Scheduling
-   npm install
-   ```
-
-2. **Environment**
-   Create `.env.local` with:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `DATABASE_URL` (PostgreSQL connection string from Supabase)
-   - `NEXT_PUBLIC_APP_URL` (e.g. `http://localhost:3000`)
-   - Optional: `RESEND_API_KEY` and `EMAIL_FROM` for RTO emails — see [docs/RTO_EMAIL_SETUP.md](docs/RTO_EMAIL_SETUP.md)  
-   - Optional: `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET` for dashboard Google Calendar (see [docs/GOOGLE_CALENDAR_SETUP.md](docs/GOOGLE_CALENDAR_SETUP.md))
-
-3. **Database**
-   ```bash
-   npm run db:migrate
-   npm run db:seed   # optional
-   ```
-
-4. **Run**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000). Log in via Supabase (users must exist in `users`; create via Admin or seed).
 
 ---
 
@@ -221,17 +214,6 @@ The schedule grid and availability tab both use approved RTO/PTO when resolving 
 | `npm run db:seed` | Seed database |
 | `npm run db:create-peak-table` | Create/ensure `store_traffic_peak` table |
 | `npm run import:excel` | Import retail/traffic from Excel |
-
----
-
-## RTO submit (go live)
-
-The RTO submit form is public (no login). Production URL examples:
-
-- `https://YOUR_APP.vercel.app/rto/submit`
-- `https://YOUR_APP.vercel.app/rto/submit?store=101` (pre-select store by id)
-
-Set `NEXT_PUBLIC_APP_URL` in Vercel to the production URL so in-app “Copy link” uses the correct domain. Share the link with store leaders; they can copy it from the RTO tab or the submit page. Pending requests appear in the app with a nav badge; leaders approve/deny there. If `RESEND_API_KEY` is set, employees receive an email on approve/deny.
 
 ---
 

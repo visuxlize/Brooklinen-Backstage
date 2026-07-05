@@ -29,11 +29,13 @@
   const moduleCardsHTML = DASHBOARD_MODULES.map((m) => `
     <a class="module-card" href="${m.href}" ${m.href === '#' ? `onclick="showcaseToast('Not included in this showcase'); return false"` : ''}>
       <div class="module-icon" style="background:${m.color}">${MODULE_ICONS[m.icon]}</div>
-      <div>
-        <div class="module-title">${m.title}</div>
+      <div class="module-body">
+        <div class="module-body-top">
+          <span class="module-title">${m.title}</span>
+          <span class="module-link">Open &rarr;</span>
+        </div>
         <div class="module-desc">${m.desc}</div>
       </div>
-      <span class="module-link">Open &rarr;</span>
     </a>
   `).join('')
 
@@ -84,9 +86,9 @@
   `
 
   // ── Promotions panel ──
-  const shownPromos = PROMOTIONS_DATA.slice(0, 3)
+  const shownPromos = PROMOTIONS_DATA.slice(0, 4)
   const promotionsHTML = `
-    <div class="card mb-16">
+    <div class="card">
       <div class="card-header">
         <span class="card-title">Upcoming Promotions</span>
       </div>
@@ -100,7 +102,7 @@
             </div>
           </div>
         `).join('')}
-        ${PROMOTIONS_DATA.length > 3 ? `<a href="#" class="see-all-link" onclick="showcaseToast('Not included in this showcase'); return false">See all (${PROMOTIONS_DATA.length}) &rarr;</a>` : ''}
+        ${PROMOTIONS_DATA.length > shownPromos.length ? `<a href="#" class="see-all-link" onclick="showcaseToast('Not included in this showcase'); return false">See all (${PROMOTIONS_DATA.length}) &rarr;</a>` : ''}
       </div>
     </div>
   `
@@ -138,12 +140,14 @@
 
     <div class="grid-5">
       <div>
-        <div class="module-grid">${moduleCardsHTML}</div>
+        <div class="module-grid mb-16">${moduleCardsHTML}</div>
+        <div class="panel-row">
+          ${promotionsHTML}
+          ${quickLinksHTML}
+        </div>
       </div>
       <div>
         ${calendarHTML}
-        ${promotionsHTML}
-        ${quickLinksHTML}
       </div>
     </div>
   `
