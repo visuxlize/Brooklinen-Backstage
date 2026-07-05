@@ -5,13 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backstage — Access</title>
   <link rel="stylesheet" href="style.css">
+  <script>
+    (function(){try{var t=localStorage.getItem('backstage_theme');if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}})();
+  </script>
   <style>
-    /* subtle animated background */
+    /* subtle brand-navy background wash */
     body {
-      background: var(--charcoal);
+      background: var(--brand-navy);
       background-image:
-        radial-gradient(ellipse at 20% 50%, rgba(184,92,56,0.08) 0%, transparent 60%),
-        radial-gradient(ellipse at 80% 20%, rgba(46,91,138,0.06) 0%, transparent 50%);
+        radial-gradient(ellipse at 20% 50%, rgba(27,75,138,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(27,75,138,0.12) 0%, transparent 50%);
     }
   </style>
 </head>

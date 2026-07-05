@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Backstage — Traffic</title>
   <link rel="stylesheet" href="style.css">
+  <script>
+    (function(){try{var t=localStorage.getItem('backstage_theme');if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}})();
+  </script>
 </head>
 <body>
 
@@ -13,15 +16,169 @@
 <script src="data.js"></script>
 <script src="nav.js"></script>
 <script>
-  const content = renderShell({
-    page: 'traffic',
-    title: 'Traffic',
-    subtitle: `Week of ${TRAFFIC_DATA.weekOf} &nbsp;&middot;&nbsp; ${TRAFFIC_DATA.store}`,
-  })
-
+  const content = renderShell({ page: 'traffic', title: 'Traffic' })
   const t = TRAFFIC_DATA
+  const storeColor = STORES[0].color
   const maxDaily = Math.max(...t.daily.map(d => d.count))
-  const maxHourly = Math.max(...t.hourly.map(h => h.count))
+  const peakDay = t.daily.reduce((a, b) => (b.count > a.count ? b : a))
+  const avgDaily = Math.round(t.stats.totalTraffic / 7)
+
+  const trendPct = Math.round((t.stats.trendMultiplier - 1) * 100)
+  const trendCls = trendPct >= 2 ? 'trend-up' : trendPct <= -2 ? 'trend-down' : 'trend-flat'
+  const trendSign = trendPct >= 0 ? '+' : ''
+
+  // ── KPI row ──
+  const kpiHTML = `
+    <div class="grid-4 mb-24">
+      <div class="stat-card">
+        <span class="stat-label">Trend Mult.</span>
+        <span class="trend-chip-value ${trendCls}">${trendSign}${trendPct}%</span>
+        <span class="stat-sub">vs baseline (x${t.stats.trendMultiplier})</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Traffic Count</span>
+        <span class="stat-value">${avgDaily}</span>
+        <span class="stat-sub">Avg per day</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Peak Day</span>
+        <span class="stat-value">${peakDay.day}</span>
+        <span class="stat-sub">${peakDay.count} visitors</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Weekly Total</span>
+        <span class="stat-value">${t.stats.totalTraffic.toLocaleString()}</span>
+        <span class="stat-sub">This week</span>
+      </div>
+    </div>
+  `
+
+  // ── Daily breakdown + upload ──
+  const dailyBarsHTML = t.daily.map(day => {
+    const fillPct = Math.round((day.count / maxDaily) * 100)
+    const budgetPct = Math.round((day.budget / maxDaily) * 100)
+    const isHighest = day.count === maxDaily
+    return `
+      <div class="traffic-bar-row">
+        <span class="traffic-day-label" style="${isHighest ? `color:${storeColor}` : ''}">${day.day}</span>
+        <div class="traffic-track">
+          <div class="traffic-budget-mark" style="left:${budgetPct}%"></div>
+          <div class="traffic-fill" style="width:${fillPct}%;background:${isHighest ? storeColor : 'var(--slate-400)'}"></div>
+        </div>
+        <div class="traffic-count-col">
+          <span class="traffic-count">${day.count}</span>
+          <span class="traffic-budget-num">/ ${day.budget}</span>
+        </div>
+      </div>
+    `
+  }).join('')
+
+  const dailyCardHTML = `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Daily Traffic Breakdown</span>
+        <span class="card-title-meta">vs Budget</span>
+      </div>
+      <div class="card-body">
+        ${dailyBarsHTML}
+        <div class="flex gap-16 text-xs text-muted" style="margin-top:12px;align-items:center">
+          <div class="flex items-center gap-8"><div style="width:16px;height:4px;background:${storeColor};border-radius:2px"></div>Actual</div>
+          <div class="flex items-center gap-8"><div style="width:2px;height:12px;background:var(--slate-400)"></div>Budget</div>
+        </div>
+      </div>
+    </div>
+  `
+
+  const uploadCardHTML = `
+    <div class="card">
+      <div class="card-header"><span class="card-title">Upload Excel</span></div>
+      <div class="card-body">
+        <div class="upload-zone">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Drop a traffic export here, or click to browse
+        </div>
+        <div class="text-xs text-muted" style="margin-top:12px">Last upload: June 30, 2026 &middot; traffic_export_wk26.xlsx</div>
+        <button class="btn btn-secondary btn-sm w-full" style="margin-top:12px;justify-content:center" onclick="showcaseToast('Not included in this showcase')">Apply Parsed Weeks</button>
+      </div>
+    </div>
+  `
+
+  // ── 5-week projection table ──
+  const proj = t.projection
+  const dayShareRows = Object.entries(proj.dayShare).map(([day, vals]) => `
+    <tr>
+      <td>${day}</td>
+      ${vals.map(v => `<td>${v}%</td>`).join('')}
+    </tr>
+  `).join('')
+
+  const projectionTableHTML = `
+    <div class="card mb-24">
+      <div class="table-header-band">5-Week Projection</div>
+      <div class="schedule-wrap">
+        <table class="data-table" style="min-width:600px">
+          <thead>
+            <tr><th>Metric</th>${proj.weeks.map(w => `<th>${w}</th>`).join('')}</tr>
+          </thead>
+          <tbody>
+            <tr><td class="font-600">LY Traffic</td>${proj.lyTraffic.map(v => `<td>${v}</td>`).join('')}</tr>
+            <tr style="background:var(--green-50)"><td class="font-700">Projected Traffic</td>${proj.projected.map(v => `<td class="font-700">${v}</td>`).join('')}</tr>
+            ${dayShareRows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `
+
+  // ── Peak hours table ──
+  const peakRowsHTML = t.peakHours.map(p => `
+    <tr>
+      <td class="font-600">${p.day}</td>
+      <td>${p.peak}</td>
+      <td>${p.second}</td>
+      <td>${p.slow}</td>
+      <td>${p.window}</td>
+      <td>${p.pctOfDaily}</td>
+    </tr>
+  `).join('')
+
+  const peakTableHTML = `
+    <div class="card mb-24">
+      <div class="table-header-band">Peak Traffic Hours</div>
+      <div class="schedule-wrap">
+        <table class="data-table" style="min-width:640px">
+          <thead>
+            <tr><th>Day</th><th>Peak Hour</th><th>2nd Peak</th><th>Slow Hour</th><th>Busiest Window</th><th>% of Daily</th></tr>
+          </thead>
+          <tbody>${peakRowsHTML}</tbody>
+        </table>
+      </div>
+    </div>
+  `
+
+  // ── Weekly history table ──
+  const avgTotal = t.history.reduce((a, w) => a + w.total, 0) / t.history.length
+  const historyRowsHTML = t.history.map(w => `
+    <tr>
+      <td>${w.weekOf}</td>
+      <td>${w.sun}</td><td>${w.mon}</td><td>${w.tue}</td><td>${w.wed}</td><td>${w.thu}</td><td>${w.fri}</td><td>${w.sat}</td>
+      <td style="${w.total > avgTotal ? 'color:var(--green-700);font-weight:700' : 'font-weight:600'}">${w.total}</td>
+    </tr>
+  `).join('')
+
+  const historyTableHTML = `
+    <div class="card">
+      <div class="card-header"><span class="card-title">Weekly Traffic History</span><span class="card-title-meta">Last ${t.history.length} weeks</span></div>
+      <div class="sticky-history-table">
+        <table>
+          <thead>
+            <tr><th>Week Of</th><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Total</th></tr>
+          </thead>
+          <tbody>${historyRowsHTML}</tbody>
+        </table>
+      </div>
+    </div>
+  `
 
   content.innerHTML = `
     <div class="showcase-banner">
@@ -29,169 +186,22 @@
       Showcase mode &mdash; traffic figures are realistic mock data for demonstration.
     </div>
 
-    <!-- Stat cards -->
-    <div class="grid-4 mb-24">
-      <div class="stat-card">
-        <div class="stat-label">Total Traffic</div>
-        <div class="stat-val">${t.stats.totalTraffic.toLocaleString()}</div>
-        <div class="stat-sub">This week</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Trend Multiplier</div>
-        <div class="stat-val" style="color:var(--sage)">x${t.stats.trendMultiplier}</div>
-        <div class="stat-sub">vs baseline</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Peak Window</div>
-        <div class="stat-val" style="font-size:22px;padding-top:4px">${t.stats.peakWindow}</div>
-        <div class="stat-sub">Daily average</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Allowable Hours</div>
-        <div class="stat-val">${t.stats.allowableHours}</div>
-        <div class="stat-sub">Based on traffic model</div>
-      </div>
+    <div class="mb-24">
+      <div class="page-h1">Traffic Data</div>
+      <div class="page-sub">${STORES[0].name} &middot; ${STORES[0].city}</div>
     </div>
 
-    <!-- Charts row -->
+    ${kpiHTML}
+
     <div class="grid-2 mb-24">
-
-      <!-- Daily bar chart -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Daily Traffic</span>
-          <span style="font-size:10px;color:var(--mid)">vs Budget</span>
-        </div>
-        <div class="card-body">
-          ${t.daily.map(day => {
-            const fillPct = Math.round((day.count / maxDaily) * 100)
-            const budgetPct = Math.round((day.budget / maxDaily) * 100)
-            const isHighest = day.count === maxDaily
-            return `
-              <div class="traffic-bar-row">
-                <span class="traffic-day" style="${isHighest ? 'color:var(--blue);' : ''}">${day.day}</span>
-                <div style="flex:1;position:relative">
-                  <!-- Budget line -->
-                  <div style="
-                    position:absolute;top:0;bottom:0;
-                    left:${budgetPct}%;
-                    width:1px;background:var(--faint);
-                    z-index:1;
-                  "></div>
-                  <div class="traffic-track">
-                    <div class="traffic-fill traffic-anim"
-                         data-pct="${fillPct}"
-                         style="width:0%;background:${isHighest ? 'var(--blue)' : 'var(--slate)'}">
-                    </div>
-                  </div>
-                </div>
-                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:52px">
-                  <span class="traffic-count" style="color:var(--charcoal);font-weight:600">${day.count}</span>
-                  <span style="font-size:9px;color:var(--faint)">/ ${day.budget}</span>
-                </div>
-              </div>
-            `
-          }).join('')}
-
-          <div style="margin-top:12px;display:flex;gap:16px;font-size:10px;color:var(--mid);align-items:center">
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="width:20px;height:4px;background:var(--slate);border-radius:2px"></div>
-              Actual
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <div style="width:1px;height:12px;background:var(--faint)"></div>
-              Budget
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Hourly breakdown -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Hourly Breakdown</span>
-          <span style="font-size:10px;color:var(--mid)">Avg per hour</span>
-        </div>
-        <div class="card-body">
-          ${t.hourly.map(h => {
-            const fillPct = Math.round((h.count / maxHourly) * 100)
-            const isPeak = h.count === maxHourly
-            return `
-              <div class="traffic-bar-row">
-                <span class="traffic-day" style="width:40px;font-size:10px;${isPeak ? 'color:var(--clay)' : ''}">${h.hour}</span>
-                <div class="traffic-track">
-                  <div class="traffic-fill hourly-anim"
-                       data-pct="${fillPct}"
-                       style="width:0%;background:${isPeak ? 'var(--clay)' : 'var(--blue)'}">
-                  </div>
-                </div>
-                <span class="traffic-count" style="${isPeak ? 'color:var(--clay);font-weight:700' : ''}">${h.count}</span>
-              </div>
-            `
-          }).join('')}
-
-          <div style="margin-top:14px;padding:10px 12px;border-radius:6px;background:rgba(184,92,56,0.07);border:1px solid rgba(184,92,56,0.15)">
-            <div style="font-size:9px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;color:var(--clay);margin-bottom:4px">Power Hour</div>
-            <div style="font-size:13px;font-weight:600;color:var(--charcoal)">${t.stats.peakWindow}</div>
-            <div style="font-size:10px;color:var(--mid);margin-top:2px">Drives schedule Power Hour row</div>
-          </div>
-        </div>
-      </div>
-
+      ${dailyCardHTML}
+      ${uploadCardHTML}
     </div>
 
-    <!-- Weekly summary table -->
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Weekly Summary</span>
-      </div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Actual Traffic</th>
-            <th>Budget</th>
-            <th>Variance</th>
-            <th>% of Week</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${t.daily.map(day => {
-            const variance = day.count - day.budget
-            const varStr = (variance >= 0 ? '+' : '') + variance
-            const varColor = variance >= 0 ? 'color:var(--sage);font-weight:600' : 'color:var(--clay);font-weight:600'
-            const weekPct = Math.round((day.count / t.stats.totalTraffic) * 100)
-            return `
-              <tr>
-                <td style="font-weight:600;color:var(--charcoal)">${day.day}</td>
-                <td style="font-weight:600;color:var(--charcoal)">${day.count}</td>
-                <td>${day.budget}</td>
-                <td style="${varColor}">${varStr}</td>
-                <td>
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <div style="width:60px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
-                      <div style="height:100%;width:${weekPct}%;background:var(--blue);border-radius:2px"></div>
-                    </div>
-                    <span style="font-size:11px;color:var(--mid)">${weekPct}%</span>
-                  </div>
-                </td>
-              </tr>
-            `
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
+    ${projectionTableHTML}
+    ${peakTableHTML}
+    ${historyTableHTML}
   `
-
-  // Animate all bars after paint
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      document.querySelectorAll('.traffic-anim, .hourly-anim').forEach(el => {
-        el.style.transition = 'width 1.2s cubic-bezier(0.4, 0, 0.2, 1)'
-        el.style.width = el.dataset.pct + '%'
-      })
-    })
-  })
 </script>
 
 </body>
