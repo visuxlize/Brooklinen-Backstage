@@ -92,7 +92,7 @@ function renderShell({ page, title, subtitle = '' }) {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', href: 'dashboard.html' },
     { id: 'schedule',  label: 'Schedule',  href: 'schedule.html' },
-    { id: 'ops',       label: 'Daily Ops', href: '#' },
+    { id: 'ops',       label: 'Daily Ops', href: 'daily-ops.html' },
     { id: 'availability', label: 'Availability', href: '#' },
     { id: 'traffic',   label: 'Traffic',   href: 'traffic.html' },
     { id: 'rto',       label: 'RTO',       href: 'rto.html', badge: pendingCount },

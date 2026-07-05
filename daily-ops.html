@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backstage — Daily Ops</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    (function(){try{var t=localStorage.getItem('backstage_theme');if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}})();
+  </script>
+</head>
+<body>
+
+<div class="app-shell"></div>
+
+<script src="data.js"></script>
+<script src="nav.js"></script>
+<script>
+  const content = renderShell({ page: 'ops', title: 'Daily Ops' })
+  const ops = DAILY_OPS_DATA
+  const storeColor = STORES[0].color
+
+  const ROLE_COLORS = {
+    Opening: '#FFF9C4',
+    LOD: '#C8E6C9',
+    'Floor Support': '#A5D6A7',
+    Stockroom: '#E1BEE7',
+    Visual: '#B3E5FC',
+    Closing: '#FFCCBC',
+    Lunch: '#CFD8DC',
+  }
+
+  function fmtCurrency(v) { return '$' + Math.round(v).toLocaleString() }
+
+  // ── Links ──
+  const linksHTML = `
+    <div class="ops-links-row">
+      <div class="ops-link-card">
+        <span class="ops-link-label">${ops.links.cashlog.label}</span>
+        <a href="#" class="ops-link-url" onclick="showcaseToast('Not included in this showcase'); return false">${ops.links.cashlog.url}</a>
+      </div>
+      <div class="ops-link-card">
+        <span class="ops-link-label">${ops.links.returns.label}</span>
+        <a href="#" class="ops-link-url" onclick="showcaseToast('Not included in this showcase'); return false">${ops.links.returns.url}</a>
+      </div>
+    </div>
+  `
+
+  // ── Metrics & goals ──
+  const m = ops.metrics
+  const kpis = [
+    { label: 'Budget', value: fmtCurrency(m.budget) },
+    { label: 'LY', value: fmtCurrency(m.ly) },
+    { label: 'Order Goal', value: m.orderGoal },
+    { label: 'AOV Goal', value: fmtCurrency(m.aovGoal) },
+    { label: 'UPT Goal', value: m.uptGoal.toFixed(1) },
+    { label: 'Conversion Goal', value: m.conversionGoal + '%' },
+  ]
+
+  function runningBox(label, val) {
+    const cls = val >= 0 ? 'running-pct-up' : 'running-pct-down'
+    const sign = val >= 0 ? '+' : ''
+    return `
+      <div class="running-pct-box ${cls}">
+        <div class="running-pct-label">${label}</div>
+        <div class="running-pct-value">${sign}${val}%</div>
+      </div>
+    `
+  }
+
+  const metricsHTML = `
+    <div class="grid-3">
+      ${kpis.map(k => `
+        <div class="stat-card">
+          <span class="stat-label">${k.label}</span>
+          <span class="stat-value">${k.value}</span>
+        </div>
+      `).join('')}
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="card-body">
+        <span class="eyebrow">Running %</span>
+        <div class="running-pct-row">
+          ${runningBox('WTD', ops.running.wtd)}
+          ${runningBox('MTD', ops.running.mtd)}
+          ${runningBox('QTD', ops.running.qtd)}
+        </div>
+      </div>
+    </div>
+  `
+
+  // ── How we will make goal today ──
+  const notesHTML = `
+    <div class="grid-2">
+      <div>
+        <span class="note-label">Current Promotion / Focuses</span>
+        <div class="note-box">${ops.notes.promotions}</div>
+      </div>
+      <div>
+        <span class="note-label">Product Update / Further Focus</span>
+        <div class="note-box">${ops.notes.productUpdate}</div>
+      </div>
+      <div>
+        <span class="note-label">Staff Recognition</span>
+        <div class="note-box">${ops.notes.staffRecognition}</div>
+      </div>
+      <div>
+        <span class="note-label">Tasks</span>
+        <div class="note-box">${ops.notes.tasks}</div>
+      </div>
+    </div>
+  `
+
+  // ── Zoning chart ──
+  const zoningRowsHTML = ops.employees.map(emp => `
+    <div class="zoning-row">
+      <div class="zoning-emp">
+        <div class="zoning-emp-name">${emp.name}</div>
+        <div class="zoning-emp-role">${emp.role}</div>
+      </div>
+      <div class="zoning-track">
+        ${emp.segments.map(([role, start, end]) => `
+          <span class="zoning-seg" style="width:${end - start}%;background:${ROLE_COLORS[role] || '#e2e8f0'}" title="${role}">${end - start > 12 ? role : ''}</span>
+        `).join('')}
+      </div>
+    </div>
+  `).join('')
+
+  const legendHTML = Object.entries(ROLE_COLORS).map(([role, color]) => `
+    <div class="zoning-legend-item">
+      <span class="zoning-legend-dot" style="background:${color}"></span>
+      ${role}
+    </div>
+  `).join('')
+
+  const zoningHTML = `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Employee Zoning Chart</span>
+        <span class="card-title-meta">8:00 AM &ndash; 9:00 PM</span>
+      </div>
+      <div class="card-body">
+        <div class="zoning-time-axis">
+          <span>8AM</span><span>10AM</span><span>12PM</span><span>2PM</span><span>4PM</span><span>6PM</span><span>9PM</span>
+        </div>
+        ${zoningRowsHTML}
+        <div class="zoning-legend">${legendHTML}</div>
+      </div>
+    </div>
+  `
+
+  content.innerHTML = `
+    <div class="showcase-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Showcase mode &mdash; links, notes, and zoning are fictional and read-only.
+    </div>
+
+    <div class="page-header-row" style="margin-bottom:16px">
+      <div>
+        <div class="page-h1">${STORES[0].name}</div>
+        <div class="page-sub">${ops.date}</div>
+      </div>
+    </div>
+
+    <div class="mb-24">
+      <span class="eyebrow" style="display:block;margin-bottom:8px">Links</span>
+      ${linksHTML}
+    </div>
+
+    <div class="grid-5 mb-24">
+      <div>
+        <span class="eyebrow" style="display:block;margin-bottom:8px">How we will make goal today</span>
+        ${notesHTML}
+      </div>
+      <div>
+        <span class="eyebrow" style="display:block;margin-bottom:8px">Metrics &amp; Goals</span>
+        ${metricsHTML}
+      </div>
+    </div>
+
+    ${zoningHTML}
+  `
+</script>
+
+</body>
+</html>

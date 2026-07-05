@@ -203,8 +203,8 @@ const DASHBOARD_MODULES = [
   },
   {
     title: 'Daily Ops',
-    desc: 'Checklists and daily walkthroughs for opening and closing.',
-    href: '#',
+    desc: 'Morning wakeup, goal metrics, and the employee zoning chart.',
+    href: 'daily-ops.html',
     color: 'linear-gradient(135deg,#7C3AED,#6D28D9)',
     icon: 'clipboard',
   },
@@ -296,10 +296,42 @@ TRAFFIC_DATA.history = [
   { weekOf: 'May 11', sun: 138, mon: 93, tue: 96,  wed: 110, thu: 119, fri: 133, sat: 162, total: 851 },
 ]
 
+const DAILY_OPS_DATA = {
+  store: 'Lincoln Park',
+  date: 'Wednesday, July 2, 2026',
+  links: {
+    cashlog: { label: 'Cashlog', url: 'internal.brooklinen.com/cashlog' },
+    returns: { label: 'Returns', url: 'internal.brooklinen.com/returns' },
+  },
+  metrics: {
+    budget: 4800,
+    ly: 3891,
+    orderGoal: 22,
+    aovGoal: 218,
+    uptGoal: 2.4,
+    conversionGoal: 18,
+  },
+  running: { wtd: 4, mtd: -2, qtd: 6 },
+  notes: {
+    promotions: 'Super Plush robes on Last Call, 40% off. Call out at the register.',
+    productUpdate: 'Airweave rebranded as Breezeweave — update talking points, same product.',
+    staffRecognition: 'Shoutout to Maya for hitting UPT goal 3 days running this week.',
+    tasks: 'Restock linen wall, confirm Power Hour coverage 1–3PM, walk the stockroom.',
+  },
+  employees: [
+    { name: 'Jordan Reyes',  role: 'LOD',           segments: [['Opening', 0, 15], ['LOD', 15, 60], ['Lunch', 60, 68], ['LOD', 68, 100]] },
+    { name: 'Maya Chen',     role: 'Floor Support',  segments: [['Opening', 0, 10], ['Floor Support', 10, 55], ['Lunch', 55, 63], ['Visual', 63, 100]] },
+    { name: 'Tobias Grant',  role: 'Stockroom',      segments: [['Stockroom', 0, 45], ['Lunch', 45, 53], ['Floor Support', 53, 100]] },
+    { name: 'Priya Nair',    role: 'Visual',         segments: [['Visual', 0, 40], ['Floor Support', 40, 100]] },
+    { name: 'Darius Webb',   role: 'Floor Support',  segments: [['Floor Support', 0, 50], ['Lunch', 50, 58], ['Closing', 58, 100]] },
+    { name: 'Sofia Morales', role: 'Closing',        segments: [['Floor Support', 0, 60], ['Lunch', 60, 68], ['Closing', 68, 100]] },
+  ],
+}
+
 // Export for use in page scripts
 if (typeof module !== 'undefined') {
   module.exports = {
     STORES, ACTIVE_STORE, DASHBOARD_DATA, SCHEDULE_DATA, RTO_DATA, TRAFFIC_DATA,
-    DASHBOARD_MODULES, CALENDAR_DATA, PROMOTIONS_DATA, QUICK_LINKS_DATA,
+    DASHBOARD_MODULES, CALENDAR_DATA, PROMOTIONS_DATA, QUICK_LINKS_DATA, DAILY_OPS_DATA,
   }
 }
